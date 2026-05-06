@@ -417,16 +417,23 @@ export function injectGlow(
   container.appendChild(svg);
 
   const ringInset = opts.kind === 'circle' ? 2 : 1;
+
+  const haloGroup = svg.querySelector(sid('haloTravel')) as SVGGElement;
+  const extraGroup = svg.querySelector(sid('extraTravel')) as SVGGElement;
+  const glowTransition = 'transform 100ms linear, opacity 100ms linear';
+  haloGroup.style.transition = glowTransition;
+  extraGroup.style.transition = glowTransition;
+
   return {
     svg,
-    haloGroup: svg.querySelector(sid('haloTravel')) as SVGGElement,
+    haloGroup,
     haloPaths: [
       svg.querySelector(sid('pathXl')) as SVGPathElement,
       svg.querySelector(sid('pathLg')) as SVGPathElement,
       svg.querySelector(sid('pathMd')) as SVGPathElement,
       svg.querySelector(sid('pathSm')) as SVGPathElement,
     ],
-    extraGroup: svg.querySelector(sid('extraTravel')) as SVGGElement,
+    extraGroup,
     extraPaths: [
       svg.querySelector(sid('extraOuter')) as SVGPathElement,
       svg.querySelector(sid('extraCore')) as SVGPathElement,

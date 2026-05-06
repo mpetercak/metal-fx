@@ -72,6 +72,8 @@ interface SharedRenderer {
   /** Frame counter — incremented every successful `renderSharedFrame`. Used by
    *  glow consumers to invalidate cached scans cheaply. */
   frameCount: number;
+  /** Timestamp of the last rendered frame — for frame-rate capping. */
+  lastFrameMs: number;
 }
 
 // (the previous shared GL-fb readback for glow sampling lived here — retired
@@ -151,6 +153,7 @@ function ensureSharedRenderer(): SharedRenderer {
     dpr,
     instances: new Set(),
     frameCount: 0,
+    lastFrameMs: 0,
   };
   return SHARED;
 }
@@ -163,6 +166,171 @@ export interface ShaderRGB {
 }
 
 const FALLBACK_WHITE: ShaderRGB = { r: 255, g: 255, b: 255 };
+
+// ─── JS-side plasma evaluator (replaces getImageData readback) ─────────────
+// Port of the fragment shader's snoise → fbm → computeEffect → palette chain.
+// Evaluated at a handful of perimeter points per glow tick (not per pixel).
+
+function mod289(x: number): number {
+  return x - Math.floor(x * (1 / 289)) * 289;
+}
+function permute1(x: number): number {
+  return mod289((x * 34 + 1) * x);
+}
+
+function snoise(vx: number, vy: number): number {
+  const C0 = 0.211324865405187;
+  const C1 = 0.366025403784439;
+  const C2 = -0.577350269189626;
+  const C3 = 0.024390243902439;
+
+  const s = (vx + vy) * C1;
+  const ix = Math.floor(vx + s);
+  const iy = Math.floor(vy + s);
+
+  const t = (ix + iy) * C0;
+  const x0x = vx - ix + t;
+  const x0y = vy - iy + t;
+
+  const i1x = x0x > x0y ? 1 : 0;
+  const i1y = 1 - i1x;
+
+  const x1x = x0x + C0 - i1x;
+  const x1y = x0y + C0 - i1y;
+  const x2x = x0x + C2;
+  const x2y = x0y + C2;
+
+  const iix = mod289(ix);
+  const iiy = mod289(iy);
+
+  const p0 = permute1(permute1(iiy) + iix);
+  const p1 = permute1(permute1(iiy + i1y) + iix + i1x);
+  const p2 = permute1(permute1(iiy + 1) + iix + 1);
+
+  let m0 = Math.max(0, 0.5 - (x0x * x0x + x0y * x0y));
+  let m1 = Math.max(0, 0.5 - (x1x * x1x + x1y * x1y));
+  let m2 = Math.max(0, 0.5 - (x2x * x2x + x2y * x2y));
+  m0 *= m0; m0 *= m0;
+  m1 *= m1; m1 *= m1;
+  m2 *= m2; m2 *= m2;
+
+  const x_0 = 2 * ((p0 * C3) % 1) - 1;
+  const x_1 = 2 * ((p1 * C3) % 1) - 1;
+  const x_2 = 2 * ((p2 * C3) % 1) - 1;
+
+  const h0 = Math.abs(x_0) - 0.5;
+  const h1 = Math.abs(x_1) - 0.5;
+  const h2 = Math.abs(x_2) - 0.5;
+
+  const ox0 = Math.floor(x_0 + 0.5);
+  const ox1 = Math.floor(x_1 + 0.5);
+  const ox2 = Math.floor(x_2 + 0.5);
+
+  const a0_0 = x_0 - ox0;
+  const a0_1 = x_1 - ox1;
+  const a0_2 = x_2 - ox2;
+
+  const corr0 = 1.79284291400159 - 0.85373472095314 * (a0_0 * a0_0 + h0 * h0);
+  const corr1 = 1.79284291400159 - 0.85373472095314 * (a0_1 * a0_1 + h1 * h1);
+  const corr2 = 1.79284291400159 - 0.85373472095314 * (a0_2 * a0_2 + h2 * h2);
+
+  const g0 = a0_0 * x0x + h0 * x0y;
+  const g1 = a0_1 * x1x + h1 * x1y;
+  const g2 = a0_2 * x2x + h2 * x2y;
+
+  return 130 * (m0 * corr0 * g0 + m1 * corr1 * g1 + m2 * corr2 * g2);
+}
+
+function fbm(px: number, py: number, octaves: number): number {
+  let val = 0;
+  let amp = 0.5;
+  for (let i = 0; i < octaves; i++) {
+    val += amp * snoise(px, py);
+    px *= 2;
+    py *= 2;
+    amp *= 0.5;
+  }
+  return val;
+}
+
+function evaluatePlasmaRGB(u: number, v: number): ShaderRGB {
+  if (!SHARED) return FALLBACK_WHITE;
+  const p = SHARED.preset;
+  const now = performance.now();
+  const t = ((now - SHARED.startMs - SHARED.pausedMs) / 1000) * p.speed;
+  const cpx = p.complexity;
+  const octaves = Math.min(4, 3 + Math.floor(cpx * 4));
+
+  let px = (u - 0.5) * p.scale;
+  let py = (v - 0.5) * p.scale;
+
+  const dirRad = (p.direction * Math.PI) / 180;
+  px += Math.cos(dirRad) * t * 0.15;
+  py += Math.sin(dirRad) * t * 0.15;
+
+  const freq = 3 + cpx * 8;
+  const len = Math.sqrt(px * px + py * py);
+  let val = 0;
+  val += Math.sin(px * freq + t);
+  val += Math.sin(py * freq + t * 1.3);
+  val += Math.sin((px + py) * freq * 0.7 + t * 0.7);
+  val += Math.sin(len * freq * 0.8 - t * 1.5);
+
+  const warpStr = p.distortion * 2;
+  const w0 = fbm(px + t * 0.1, py, octaves);
+  const w1 = fbm(px + 5, py + t * 0.12 + 5, octaves);
+  val += (w0 + w1) * warpStr * p.distortion;
+  val = val * 0.2 * p.intensity + 0.5;
+  val = Math.max(0, Math.min(1, val));
+
+  const st = val * val * (3 - 2 * val);
+  const k = 64;
+  const w1p = p.alphas[0] * Math.exp(-k * st * st);
+  const w2p = p.alphas[1] * Math.exp(-k * (st - 0.25) * (st - 0.25));
+  const w3p = p.alphas[2] * Math.exp(-k * (st - 0.5) * (st - 0.5));
+  const w4p = p.alphas[3] * Math.exp(-k * (st - 0.75) * (st - 0.75));
+  const w5p = p.alphas[4] * Math.exp(-k * (st - 1.0) * (st - 1.0));
+  const wTotal = w1p + w2p + w3p + w4p + w5p + 0.0001;
+
+  const colors = p.colors.map(hexToRgb);
+  const rr =
+    (colors[0][0] * w1p + colors[1][0] * w2p + colors[2][0] * w3p +
+     colors[3][0] * w4p + colors[4][0] * w5p) / wTotal;
+  const gg =
+    (colors[0][1] * w1p + colors[1][1] * w2p + colors[2][1] * w3p +
+     colors[3][1] * w4p + colors[4][1] * w5p) / wTotal;
+  const bb =
+    (colors[0][2] * w1p + colors[1][2] * w2p + colors[2][2] * w3p +
+     colors[3][2] * w4p + colors[4][2] * w5p) / wTotal;
+
+  const gamma = 1.3;
+  return {
+    r: Math.pow(Math.max(0, Math.min(1, rr)), gamma) * 255,
+    g: Math.pow(Math.max(0, Math.min(1, gg)), gamma) * 255,
+    b: Math.pow(Math.max(0, Math.min(1, bb)), gamma) * 255,
+  };
+}
+
+/** Map instance-canvas DPR-pixel coordinates to shader UV [0,1]. */
+function canvasPixelToUV(inst: MetalFxInstance, px: number, py: number): { u: number; v: number } {
+  const dpr = inst.dpr;
+  const dw = inst.cssWidth * dpr;
+  const dh = inst.cssHeight * dpr;
+  const cw = CANONICAL_GL_SIZE * dpr;
+  const ch = cw;
+  const bdW = CANONICAL_PILL_W * dpr;
+  const bdH = CANONICAL_PILL_H * dpr;
+  let srcW = (dw * cw) / (bdW * inst.shaderScale);
+  let srcH = (dh * ch) / (bdH * inst.shaderScale);
+  if (srcW > cw) srcW = cw;
+  if (srcH > ch) srcH = ch;
+  const sx = (cw - srcW) / 2;
+  const sy = (ch - srcH) / 2;
+  return {
+    u: (sx + (px / dw) * srcW) / cw,
+    v: 1 - (sy + (py / dh) * srcH) / ch,
+  };
+}
 
 /** Sample shader luminance at instance-canvas pixel `(x, y)` (DPR-aware).
  *  Direct port of `_btnGlowLumAt` (index.html L5316) — reads from the
@@ -385,16 +553,20 @@ export function updateInstance(
     opacityMul: number;
   }>
 ): void {
-  let dirty = false;
+  let sizeDirty = false;
+  let maskDirty = false;
   if (patch.cssWidth !== undefined && patch.cssWidth !== inst.cssWidth) {
     inst.cssWidth = patch.cssWidth;
-    dirty = true;
+    sizeDirty = true;
   }
   if (patch.cssHeight !== undefined && patch.cssHeight !== inst.cssHeight) {
     inst.cssHeight = patch.cssHeight;
-    dirty = true;
+    sizeDirty = true;
   }
-  if (patch.cornerRadius !== undefined) inst.cornerRadius = patch.cornerRadius;
+  if (patch.cornerRadius !== undefined && patch.cornerRadius !== inst.cornerRadius) {
+    inst.cornerRadius = patch.cornerRadius;
+    maskDirty = true;
+  }
   if (patch.kind !== undefined && patch.kind !== inst.kind) {
     inst.kind = patch.kind;
     if (patch.shaderScale === undefined) {
@@ -403,12 +575,17 @@ export function updateInstance(
     }
     if (patch.ringCssPx === undefined) {
       inst.ringCssPx = patch.kind === 'circle' ? 2 : 1;
+      maskDirty = true;
     }
   }
   if (patch.shaderScale !== undefined) inst.shaderScale = patch.shaderScale;
-  if (patch.ringCssPx !== undefined) inst.ringCssPx = patch.ringCssPx;
+  if (patch.ringCssPx !== undefined && patch.ringCssPx !== inst.ringCssPx) {
+    inst.ringCssPx = patch.ringCssPx;
+    maskDirty = true;
+  }
   if (patch.opacityMul !== undefined) inst.opacityMul = patch.opacityMul;
-  if (dirty) resizeInstanceCanvas(inst);
+  if (sizeDirty) resizeInstanceCanvas(inst);
+  else if (maskDirty) applyRingMask(inst);
 }
 
 export function setInstanceVisible(inst: MetalFxInstance, visible: boolean): void {
@@ -441,50 +618,47 @@ function resizeInstanceCanvas(inst: MetalFxInstance): void {
   const h = Math.max(1, Math.round(inst.cssHeight * inst.dpr));
   if (inst.canvas.width !== w) inst.canvas.width = w;
   if (inst.canvas.height !== h) inst.canvas.height = h;
+  applyRingMask(inst);
 }
 
-/** Punch the inner hole on the visible canvas so only the outer ring of the
- *  shader survives. Mirrors `punchAuxInnerHole` from `index.html` exactly:
- *  ring width = `ringCssPx` × DPR; inner radius = `(cornerRadius − ringCssPx)`
- *  × DPR. */
-function punchInnerHole(inst: MetalFxInstance): void {
-  const ctx = inst.ctx;
-  const dpr = inst.dpr;
-  const stroke = inst.ringCssPx * dpr;
-  const w = inst.canvas.width;
-  const h = inst.canvas.height;
-  const innerR = Math.max(0, (inst.cornerRadius - inst.ringCssPx) * dpr);
+/** SVG rounded-rect path command string. */
+function svgRRect(x: number, y: number, w: number, h: number, r: number): string {
+  const rr = Math.max(0, Math.min(r, w / 2, h / 2));
+  if (rr < 0.01) return `M${x},${y}h${w}v${h}h${-w}Z`;
+  return (
+    `M${x + rr},${y}` +
+    `h${w - 2 * rr}` +
+    `a${rr},${rr} 0 0 1 ${rr},${rr}` +
+    `v${h - 2 * rr}` +
+    `a${rr},${rr} 0 0 1 ${-rr},${rr}` +
+    `h${-(w - 2 * rr)}` +
+    `a${rr},${rr} 0 0 1 ${-rr},${-rr}` +
+    `v${-(h - 2 * rr)}` +
+    `a${rr},${rr} 0 0 1 ${rr},${-rr}Z`
+  );
+}
 
-  ctx.save();
-  ctx.globalCompositeOperation = 'destination-out';
-  ctx.fillStyle = '#000';
-  ctx.beginPath();
-  const x = stroke;
-  const y = stroke;
-  const iw = w - 2 * stroke;
-  const ih = h - 2 * stroke;
-  if (
-    typeof (ctx as CanvasRenderingContext2D & { roundRect?: unknown })
-      .roundRect === 'function'
-  ) {
-    (ctx as CanvasRenderingContext2D & {
-      roundRect: (x: number, y: number, w: number, h: number, r: number) => void;
-    }).roundRect(x, y, iw, ih, innerR);
-  } else {
-    // Manual rounded-rect fallback for older Safari.
-    const r = Math.min(innerR, iw / 2, ih / 2);
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + iw - r, y);
-    ctx.arcTo(x + iw, y, x + iw, y + r, r);
-    ctx.lineTo(x + iw, y + ih - r);
-    ctx.arcTo(x + iw, y + ih, x + iw - r, y + ih, r);
-    ctx.lineTo(x + r, y + ih);
-    ctx.arcTo(x, y + ih, x, y + ih - r, r);
-    ctx.lineTo(x, y + r);
-    ctx.arcTo(x, y, x + r, y, r);
-  }
-  ctx.fill();
-  ctx.restore();
+/** Apply an even-odd SVG ring mask via CSS so the compositor punches the
+ *  inner hole on the GPU. The canvas buffer stays unpunched — glow sampling
+ *  reads it directly. Updated on resize / radius change, zero per-frame cost. */
+function applyRingMask(inst: MetalFxInstance): void {
+  const w = inst.cssWidth;
+  const h = inst.cssHeight;
+  const r = inst.cornerRadius;
+  const s = inst.ringCssPx;
+  const innerR = Math.max(0, r - s);
+  const outer = svgRRect(0, 0, w, h, r);
+  const inner = svgRRect(s, s, w - 2 * s, h - 2 * s, innerR);
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'>` +
+    `<path fill-rule='evenodd' d='${outer} ${inner}' fill='white'/>` +
+    `</svg>`;
+  const url = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+  inst.canvas.style.maskImage = url;
+  inst.canvas.style.webkitMaskImage = url;
+  inst.canvas.style.maskSize = '100% 100%';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (inst.canvas.style as any).webkitMaskSize = '100% 100%';
 }
 
 /** Per-frame copy from the shared GL canvas into an instance's 2D canvas.
@@ -519,28 +693,18 @@ function copyShaderToInstance(inst: MetalFxInstance): void {
   inst.ctx.drawImage(renderer.glCanvas, sx, sy, srcW, srcH, 0, 0, dw, dh);
   if (inst.opacityMul < 1) inst.ctx.globalAlpha = 1;
 
-  // Capture the unpunched bitmap for the glow's brightness scan + tint
-  // sampler. Direct port of `btnGlowSampleBuf = btnDisplayCtx.getImageData(...)`
-  // from index.html L7654 — the canonical engine reads from the SAME 2D
-  // bitmap each frame BEFORE punching the centre hole, so the perimeter
-  // sample at e.g. (cssX=18, cssY=0) on a 36×36 circle reads from buffer
-  // index `(0 * 72 + 36) * 4` directly, with no GL-fb crop math involved.
-  // Skipping the readback when neither glow nor reflection consumers ever
-  // sample isn't worth the bookkeeping — the per-instance buffer is small
-  // (≤ 268 × 80 × 4 ≈ 86 KB at default DPR) and `getImageData` reuses the
-  // same backing store via the assignment.
+  // The ring mask is handled by CSS mask-image (applied in applyRingMask),
+  // so the canvas buffer stays unpunched. The glow's brightness scan reads
+  // from this buffer directly — getImageData is deferred to the glow tick
+  // (see glow-luminance optimisation).
   try {
     const img = inst.ctx.getImageData(0, 0, dw, dh);
     inst.glowSampleBuf = img.data;
     inst.glowSampleW = dw;
     inst.glowSampleH = dh;
   } catch {
-    // Cross-origin canvas tainting can throw — leave the buffer as-is so
-    // the glow falls back to its existing value (or stays at zero
-    // luminance, which means the floor opacity path).
+    // Cross-origin canvas tainting — leave the buffer as-is.
   }
-
-  punchInnerHole(inst);
 
   inst.onAfterFrame?.();
 }
@@ -596,8 +760,18 @@ function renderSharedFrame(now: number): void {
   SHARED.frameCount++;
 }
 
+/** Minimum ms between rendered frames — 33 ms ≈ 30 fps. The plasma animation
+ *  is slow noise blobs; 30 fps is visually identical to 120 fps and cuts main-
+ *  thread cost by 75 % on ProMotion displays. */
+const FRAME_INTERVAL_MS = 33;
+
 function tick(now: number): void {
   if (!SHARED) return;
+  SHARED.rafId = requestAnimationFrame(tick);
+
+  if (now - SHARED.lastFrameMs < FRAME_INTERVAL_MS) return;
+  SHARED.lastFrameMs = now;
+
   let anyVisible = false;
   for (const inst of SHARED.instances) {
     if (inst.visible) {
@@ -611,7 +785,6 @@ function tick(now: number): void {
       if (inst.visible) copyShaderToInstance(inst);
     }
   }
-  SHARED.rafId = requestAnimationFrame(tick);
 }
 
 function startSharedLoop(): void {

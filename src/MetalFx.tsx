@@ -285,21 +285,21 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
       io.observe(root);
     }
 
-    /* Per-frame glow update — runs on its own RAF so we don't block the
-     * shared renderer's loop. The shared loop populates the GL framebuffer
-     * sample buffer (`renderer.glowSampleBuf`) before this fires, so the
-     * brightness scan inside `updateGlow` reads fresh shader luminance.
-     * The shared loop already calls `scheduleReflectionPaint` via
-     * `onAfterFrame`; the glow has its own cadence that's allowed to
-     * stutter under load without ruining the look. */
+    /* Glow update at ~10 fps. The glow dwells for seconds and wanders slowly
+     * — CSS transitions interpolate the SVG position at compositor frame rate
+     * so the JS tick can run infrequently. */
+    const GLOW_INTERVAL_MS = 100; // ~10 fps
     let glowRaf = 0;
+    let lastGlowMs = 0;
     const tickGlow = (now: number) => {
+      glowRaf = requestAnimationFrame(tickGlow);
+      if (now - lastGlowMs < GLOW_INTERVAL_MS) return;
+      lastGlowMs = now;
       const handles = glowHandlesRef.current;
       const inst = instanceRef.current;
       if (handles && inst && inst.visible) {
         updateGlow(handles, inst, now, inst.opacityMul, themeRef.current);
       }
-      glowRaf = requestAnimationFrame(tickGlow);
     };
     glowRaf = requestAnimationFrame(tickGlow);
 

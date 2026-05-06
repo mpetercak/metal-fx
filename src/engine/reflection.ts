@@ -130,9 +130,41 @@ export interface ReflectionTarget {
   appliedPositionRelative: boolean;
   /** Whether we toggled the host's `isolation` from `auto` to `isolate`. */
   appliedIsolation: boolean;
+  /** Observer-driven style refresh — avoids per-frame getComputedStyle. */
+  resizeObserver: ResizeObserver | null;
+  mutationObserver: MutationObserver | null;
 }
 
 const targets: Set<ReflectionTarget> = new Set();
+
+/** Re-read cached style values for a target. Called by observers, not per-frame. */
+function refreshTargetStyles(t: ReflectionTarget): void {
+  t.cornerRadius = readCornerRadius(t.el);
+  const spec = readHairlineSpec(t.el);
+  t.hairlineWidth = spec.width;
+  t.hairlineOuterCssPx = spec.outerCssPx;
+}
+
+function attachObservers(t: ReflectionTarget): void {
+  if (typeof ResizeObserver !== 'undefined') {
+    t.resizeObserver = new ResizeObserver(() => refreshTargetStyles(t));
+    t.resizeObserver.observe(t.el);
+  }
+  if (typeof MutationObserver !== 'undefined') {
+    t.mutationObserver = new MutationObserver(() => refreshTargetStyles(t));
+    t.mutationObserver.observe(t.el, {
+      attributes: true,
+      attributeFilter: ['style', 'class'],
+    });
+  }
+}
+
+function detachObservers(t: ReflectionTarget): void {
+  t.resizeObserver?.disconnect();
+  t.resizeObserver = null;
+  t.mutationObserver?.disconnect();
+  t.mutationObserver = null;
+}
 
 // ─── Geometry helpers ─────────────────────────────────────────────────────
 
@@ -330,10 +362,45 @@ interface BoxRect {
   r: number;
 }
 
-/** Port of `_proxMaskedFillPasses` — paint the source through a rounded
- *  silhouette clip in 1-or-more alpha chunks (each up to globalAlpha=1)
- *  using `'lighter'` after the first chunk so total alpha can stack past 1.
- *  Each chunk masks alpha via the directional gradient + `destination-in`. */
+/** CSS blur radius on the fill canvas (from styles.ts). The ring clip must be
+ *  wide enough that the blur can't bleed content from the ring into the centre. */
+const FILL_BLUR_CSS_PX = 4;
+
+/** Fill ring clip — even-odd ring at the outer edge, wide enough to contain
+ *  both the RANGE_PX gradient band and the CSS blur spread so the blur can
+ *  never bleed shader content into the button's centre. */
+function fillRingClip(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  radiusDevPx: number,
+  bandDevPx: number
+): void {
+  if (w <= 2 * bandDevPx || h <= 2 * bandDevPx) {
+    ctx.beginPath();
+    roundRectPath(ctx, x, y, w, h, radiusDevPx);
+    ctx.clip();
+    return;
+  }
+  ctx.beginPath();
+  roundRectPath(ctx, x, y, w, h, radiusDevPx);
+  roundRectPath(
+    ctx,
+    x + bandDevPx,
+    y + bandDevPx,
+    w - 2 * bandDevPx,
+    h - 2 * bandDevPx,
+    Math.max(0, radiusDevPx - bandDevPx)
+  );
+  ctx.clip('evenodd');
+}
+
+/** Paint the source through a ring-shaped clip so the fill is never painted
+ *  in the centre of the host. The gradient still provides smooth alpha falloff
+ *  within the ring, but the CSS blur(4px) on the fill canvas can't bleed
+ *  content that was never drawn. */
 function maskedFillPasses(
   ctx: CanvasRenderingContext2D,
   src: CanvasImageSource,
@@ -344,17 +411,24 @@ function maskedFillPasses(
   totalAlpha: number,
   grad: CanvasGradient,
   dst: DrawDst,
-  fillBox: BoxRect
+  fillBox: BoxRect,
+  dpr: number
 ): void {
+  const fillBandDevPx = Math.max(1, Math.round((RANGE_PX + FILL_BLUR_CSS_PX * 3) * dpr));
   let remaining = Math.max(0, totalAlpha);
   let firstChunk = true;
-  // Safety cap — chunks are at most 1.0 each, so 8 chunks covers the 3.6 max.
   for (let i = 0; i < 8 && remaining > 1e-4; i++) {
     const a = Math.min(1, remaining);
     ctx.save();
-    ctx.beginPath();
-    roundRectPath(ctx, fillBox.x, fillBox.y, fillBox.w, fillBox.h, fillBox.r);
-    ctx.clip();
+    fillRingClip(
+      ctx,
+      fillBox.x,
+      fillBox.y,
+      fillBox.w,
+      fillBox.h,
+      fillBox.r,
+      fillBandDevPx
+    );
     ctx.globalCompositeOperation = firstChunk ? 'source-over' : 'lighter';
     firstChunk = false;
     ctx.globalAlpha = a;
@@ -563,7 +637,10 @@ export function addReflectionTarget(
     hairlineOuterCssPx: initialSpec.outerCssPx,
     appliedPositionRelative,
     appliedIsolation,
+    resizeObserver: null,
+    mutationObserver: null,
   };
+  attachObservers(target);
   targets.add(target);
   return target;
 }
@@ -571,6 +648,11 @@ export function addReflectionTarget(
 export function removeReflectionTarget(el: HTMLElement): void {
   for (const target of targets) {
     if (target.el === el) {
+      detachObservers(target);
+      target.canvas.width = 0;
+      target.canvas.height = 0;
+      target.strokeCanvas.width = 0;
+      target.strokeCanvas.height = 0;
       if (target.wrap.parentNode === target.el) {
         target.el.removeChild(target.wrap);
       }
@@ -590,23 +672,19 @@ export function paintReflections(): void {
   if (targets.size === 0) return;
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
 
+  // Cache anchor rects so N targets sharing the same anchor don't re-read.
+  const anchorRects = new Map<HTMLElement, DOMRect>();
+
   for (const t of targets) {
     const tRect = t.el.getBoundingClientRect();
-    const aRect = t.anchorEl.getBoundingClientRect();
+    let aRect = anchorRects.get(t.anchorEl);
+    if (!aRect) {
+      aRect = t.anchorEl.getBoundingClientRect();
+      anchorRects.set(t.anchorEl, aRect);
+    }
     if (tRect.width < 1 || tRect.height < 1) continue;
     if (aRect.width < 1 || aRect.height < 1) continue;
 
-    // ─── Horizontal-only, ≤ 32 px filter ───────────────────────────────
-    // Two rules ported from the canonical engine (index.html L5930, L5977):
-    //   • Vertical neighbours (stacked above / below) are SKIPPED entirely —
-    //     the metal-fx anchor only reflects onto components in the same row.
-    //   • Components beyond ATTACH_RANGE_PX (32 CSS px) gap from the anchor
-    //     are SKIPPED — the reflection effect is meant to read as light
-    //     bouncing onto an immediately adjacent neighbour, not as ambient
-    //     spill across the whole layout.
-    // When a registered target fails either rule we still clear its canvases
-    // so a previously-painted reflection (if the layout shifted into range
-    // earlier) doesn't linger.
     if (!isHorizontalNeighbour(aRect, tRect)) {
       if (t.canvas.width !== 1) {
         t.canvas.width = 1;
@@ -619,19 +697,8 @@ export function paintReflections(): void {
       continue;
     }
 
-    // Refresh corner radius + hairline spec lazily — host themes can change
-    // both (e.g. light-mode chips toggle from a CSS border to an inset
-    // box-shadow hairline) so we re-read each frame and update the cached
-    // values when they drift.
-    const newCorner = readCornerRadius(t.el);
-    if (Math.abs(newCorner - t.cornerRadius) > 0.01) t.cornerRadius = newCorner;
-    const newHairline = readHairlineSpec(t.el);
-    if (Math.abs(newHairline.width - t.hairlineWidth) > 0.01) {
-      t.hairlineWidth = newHairline.width;
-    }
-    if (Math.abs(newHairline.outerCssPx - t.hairlineOuterCssPx) > 0.01) {
-      t.hairlineOuterCssPx = newHairline.outerCssPx;
-    }
+    // cornerRadius / hairlineWidth / hairlineOuterCssPx are kept fresh by
+    // ResizeObserver + MutationObserver — no per-frame getComputedStyle.
 
     const anchorCanvas = t.anchor.canvas;
     const sw = anchorCanvas.width | 0;
@@ -817,7 +884,8 @@ export function paintReflections(): void {
       fillReflectionAlpha,
       grad,
       drawDst,
-      strokeBox
+      strokeBox,
+      dpr
     );
 
     // Stroke canvas: rim shader band + crisp white border highlight. Band
