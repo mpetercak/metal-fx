@@ -176,7 +176,7 @@ const CSS = /* css */ `
   overflow: visible;
   z-index: 3;
   pointer-events: none;
-  mix-blend-mode: screen;
+  // mix-blend-mode: screen;
   opacity: 0.7;
 }
 .metal-fx-root[data-theme='light'] .metal-fx-glow-svg {
@@ -209,7 +209,6 @@ const CSS = /* css */ `
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 100%;
   pointer-events: none;
 }
 .metal-fx-content > * {
@@ -266,7 +265,7 @@ const CSS = /* css */ `
   border-radius: inherit;
   overflow: hidden;
   z-index: 0;
-  mix-blend-mode: screen;
+  // mix-blend-mode: screen;
   isolation: isolate;
 }
 .metal-fx-reflection-canvas {

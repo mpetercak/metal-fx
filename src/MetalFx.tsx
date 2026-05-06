@@ -26,6 +26,8 @@ import {
 import { ensureStylesInjected } from './styles';
 import type { MetalFxProps, MetalFxTheme } from './types';
 
+ensureStylesInjected();
+
 /** Resolve `theme: 'auto'` to a concrete `'dark' | 'light'` value, listening
  *  for system theme changes via `prefers-color-scheme`. */
 function useResolvedTheme(theme: MetalFxTheme): 'dark' | 'light' {
@@ -384,8 +386,18 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
       data-normalize={normalizeHostStyles ? 'true' : 'false'}
       style={wrapperStyle}
     >
-      <canvas ref={canvasRef} className="metal-fx-canvas" aria-hidden="true" />
-      <div ref={innerRef} className="metal-fx-inner" aria-hidden="true" />
+      <canvas
+        ref={canvasRef}
+        className="metal-fx-canvas"
+        aria-hidden="true"
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+      />
+      <div
+        ref={innerRef}
+        className="metal-fx-inner"
+        aria-hidden="true"
+        style={{ position: 'absolute', inset: 3 }}
+      />
       {glowEnabled && (
         <div
           ref={glowHostRef}
