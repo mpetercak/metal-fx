@@ -5,16 +5,16 @@ type Theme = 'dark' | 'light';
 
 const PALETTE: Record<Preset, Record<Theme, string[]>> = {
   chromatic: {
-    dark: ['#aae8ff', '#c5fe9e', '#f7888d', '#fffdc3', '#007cff'],
-    light: ['#fff2f2', '#fffad2', '#b0e9bc', '#e1ecff', '#9ea0a7'],
+    dark: ['#aae8ff', '#c5fe9e', '#f7888d', '#fffdc3'],
+    light: ['#f0a0a0', '#c8d888', '#70c090', '#90a8e0'],
   },
   silver: {
-    dark: ['#dedede', '#747270', '#e5e5e5', '#ffffff', '#e6e6e6'],
-    light: ['#f6f6f6', '#ffffff', '#f7f7f7', '#c9c9c9', '#d0d0d0'],
+    dark: ['#dedede', '#747270', '#e5e5e5', '#ffffff'],
+    light: ['#b0b0b0', '#d0d0d0', '#a0a0a0', '#c8c8c8'],
   },
   gold: {
-    dark: ['#ffffff', '#f7d488', '#fffdc3', '#ffffff', '#f7d488'],
-    light: ['#fff8e1', '#fffbe0', '#fff6d6', '#dcd2bc', '#f9f7e5'],
+    dark: ['#ffffff', '#f7d488', '#fffdc3', '#ffffff'],
+    light: ['#d4b060', '#c8a848', '#e0c878', '#b89840'],
   },
 };
 
@@ -75,23 +75,52 @@ export function PureCss({
     overflow: 'visible',
   }), [bg, radius]);
 
-  const gradientStops = colors.map((c, i) => `${c} ${(i / colors.length) * 100}%`).join(', ') + `, ${colors[0]} 100%`;
+  const half = Math.ceil(colors.length / 2);
+  const colorsA = colors.slice(0, half);
+  const colorsB = colors.slice(half);
 
-  const ringStyle = useMemo<CSSProperties>(() => ({
-    content: '""',
+  const buildStops = (cols: string[]) => {
+    const s: string[] = [];
+    const n = cols.length;
+    const span = 100 / n;
+    for (let i = 0; i < n; i++) {
+      const start = span * i;
+      s.push(`transparent ${start}%`);
+      s.push(`${cols[i]}66 ${start + span * 0.42}%`);
+      s.push(`${cols[i]} ${start + span * 0.47}%`);
+      s.push(`${cols[i]}66 ${start + span * 0.52}%`);
+      s.push(`transparent ${start + span * 0.58}%`);
+    }
+    return s.join(', ');
+  };
+  const stopsA = buildStops(colorsA);
+  const stopsB = buildStops(colorsB);
+
+  const ringBaseStyle: CSSProperties = {
     position: 'absolute',
     inset: 0,
     borderRadius: 'inherit',
     padding: ringPx,
-    background: `conic-gradient(from var(--mfx-css-angle-${uid}), ${gradientStops})`,
     WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
     WebkitMaskComposite: 'xor',
     maskComposite: 'exclude',
-    opacity: strength * 0.85,
     pointerEvents: 'none',
     zIndex: 0,
-    animation: `mfx-css-spin-${uid} 4s linear infinite`,
-  }), [uid, gradientStops, ringPx, strength]);
+  };
+
+  const ringStyleA = useMemo<CSSProperties>(() => ({
+    ...ringBaseStyle,
+    background: `conic-gradient(from var(--mfx-a-${uid}), ${stopsA})`,
+    opacity: strength * 0.85,
+    animation: `mfx-spin-a-${uid} 12s ease-in-out infinite`,
+  }), [uid, stopsA, ringPx, strength]);
+
+  const ringStyleB = useMemo<CSSProperties>(() => ({
+    ...ringBaseStyle,
+    background: `conic-gradient(from var(--mfx-b-${uid}), ${stopsB})`,
+    opacity: strength * 0.65,
+    animation: `mfx-spin-b-${uid} 8s ease-in-out infinite reverse`,
+  }), [uid, stopsB, ringPx, strength]);
 
   const glowStyle = useMemo<CSSProperties>(() => {
     if (disableGlow) return { display: 'none' };
@@ -106,7 +135,8 @@ export function PureCss({
       pointerEvents: 'none',
       zIndex: 1,
       offsetPath: `rect(0 100% 100% 0 round ${radius}px)`,
-      animation: `mfx-css-glow-${uid} 6s ease-in-out infinite alternate`,
+      offsetDistance: '15%',
+      animation: `mfx-glow-fade-${uid} 4s ease-in-out infinite`,
     };
   }, [uid, accentColor, strength, disableGlow, radius]);
 
@@ -130,21 +160,37 @@ export function PureCss({
   return (
     <>
       <style>{`
-        @property --mfx-css-angle-${uid} {
+        @property --mfx-a-${uid} {
           syntax: '<angle>';
           initial-value: 0deg;
           inherits: false;
         }
-        @keyframes mfx-css-spin-${uid} {
-          to { --mfx-css-angle-${uid}: 360deg; }
+        @property --mfx-b-${uid} {
+          syntax: '<angle>';
+          initial-value: 0deg;
+          inherits: false;
         }
-        @keyframes mfx-css-glow-${uid} {
-          0%   { offset-distance: 0%; }
-          100% { offset-distance: 100%; }
+        @keyframes mfx-spin-a-${uid} {
+          0%   { --mfx-a-${uid}: 0deg; }
+          25%  { --mfx-a-${uid}: 140deg; }
+          50%  { --mfx-a-${uid}: 200deg; }
+          75%  { --mfx-a-${uid}: 290deg; }
+          100% { --mfx-a-${uid}: 360deg; }
+        }
+        @keyframes mfx-spin-b-${uid} {
+          0%   { --mfx-b-${uid}: 0deg; }
+          30%  { --mfx-b-${uid}: 120deg; }
+          60%  { --mfx-b-${uid}: 250deg; }
+          100% { --mfx-b-${uid}: 360deg; }
+        }
+        @keyframes mfx-glow-fade-${uid} {
+          0%, 100% { opacity: 0; }
+          30%, 70%  { opacity: ${strength * 0.25}; }
         }
       `}</style>
       <div ref={rootRef} style={rootStyle}>
-        <div style={ringStyle} aria-hidden="true" />
+        <div style={ringStyleA} aria-hidden="true" />
+        <div style={ringStyleB} aria-hidden="true" />
         <div style={glowStyle} aria-hidden="true" />
         <div style={reflectionStyle} aria-hidden="true" />
         <div data-mfx-content="" style={{ position: 'relative', zIndex: 2, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '100%', pointerEvents: 'none' }}>

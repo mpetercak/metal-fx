@@ -21,7 +21,7 @@ const RELOCATE_DELTA = 0.05;         // Min lum difference to trigger relocation
 const MIN_DWELL_MS = 3000;           // Minimum time before relocating to a brighter spot
 const PEAK_OP = 0.85, BASE_OP = 0.34; // Opacity range (dim at low lum, bright at high)
 const RELOC_FADE_MS = 500;           // Duration of fade-out/in during relocation
-const PERIM_SAMPLES = 48;            // Number of perimeter points to scan per update
+const PERIM_SAMPLES = 24;            // Number of perimeter points to scan per update
 const WANDER_RANGE = 15, WANDER_LERP = 0.0075, WANDER_RETARGET = 120; // Subtle drift
 const INSET = 1.5;                   // How far inside the border the halo sits (CSS-px)
 // Main halo (wide blurred strokes)

@@ -131,7 +131,7 @@ function ensureSharedRenderer(): SharedRenderer {
 // flush on every frame. The plasma shader evolves slowly so 200ms-stale
 // data is visually indistinguishable.
 
-const GLOW_READBACK_INTERVAL_MS = 200;
+const GLOW_READBACK_INTERVAL_MS = 300;
 let _lastReadbackMs = 0;
 /** Lazily refresh the shared pixel buffer if the cooldown has elapsed. */
 function ensureGlowPixels(): void {
@@ -458,8 +458,8 @@ function renderSharedFrame(now: number): void {
   SHARED.frameCount++;
 }
 
-/** ~30fps cap — the effect is heavily blurred so higher rates are imperceptible. */
-const FRAME_INTERVAL_MS = 33;
+/** ~24fps cap — the effect is heavily blurred so higher rates are imperceptible. */
+const FRAME_INTERVAL_MS = 42;
 let lastFrameMs = 0;
 
 /**

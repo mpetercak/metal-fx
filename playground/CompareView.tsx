@@ -82,7 +82,7 @@ function VariantCard({ title, subtitle, children }: VariantCardProps) {
 }
 
 const ArrowUpIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M8 12V4M4 7l4-4 4 4" />
   </svg>
 );
@@ -169,19 +169,19 @@ export function CompareView({ theme }: CompareViewProps) {
           </MetalFx>
         </VariantCard>
 
-        <VariantCard title="Level 1: Pure CSS" subtitle="conic-gradient + @property, zero JS animation">
+        <VariantCard title="Pure CSS" subtitle="conic-gradient + @property, zero JS animation">
           <PureCss
             preset={preset}
             theme={resolvedTheme}
             variant={variant}
             disableGlow={disableGlow}
-            disableReflections={disableReflections}
+            disableReflections
           >
             {renderChild()}
           </PureCss>
         </VariantCard>
 
-        <VariantCard title="Level 2: Shader Minimal" subtitle="WebGL ring only, no glow / reflections">
+        {/* <VariantCard title="Level 2: Shader Minimal" subtitle="WebGL ring only, no glow / reflections">
           <ShaderMinimal
             key={`min-${variant}-${preset}`}
             preset={preset}
@@ -190,9 +190,9 @@ export function CompareView({ theme }: CompareViewProps) {
           >
             {renderChild()}
           </ShaderMinimal>
-        </VariantCard>
+        </VariantCard> */}
 
-        <VariantCard title="Level 3: Shader + CSS Effects" subtitle="WebGL ring + CSS glow + CSS box-shadow spill">
+        {/* <VariantCard title="Level 3: Shader + CSS Effects" subtitle="WebGL ring + CSS glow + CSS box-shadow spill">
           <ShaderCssGlow
             key={`css-${variant}-${preset}`}
             preset={preset}
@@ -203,7 +203,7 @@ export function CompareView({ theme }: CompareViewProps) {
           >
             {renderChild()}
           </ShaderCssGlow>
-        </VariantCard>
+        </VariantCard> */}
       </div>
     </div>
   );
