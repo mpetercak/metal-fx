@@ -1,0 +1,133 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.9/schema.json",
+  "files": {
+    "includes": ["**", "!**/dist", "!shared/api/src/generated"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 120
+  },
+  "javascript": {
+    "formatter": {
+      "trailingCommas": "none"
+    }
+  },
+  "css": {
+    "parser": {
+      "cssModules": false,
+      "tailwindDirectives": true
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.stories.ts", "**/*.stories.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/storybook/.storybook/**", "packages/storybook/vitest.config.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/quote-tools/Petsy-insurance-FE/src/app/globals.css"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noImportantStyles": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "shared/ui/src/**"
+      ],
+      "linter": {
+        "rules": {
+          "nursery": {
+            "noExcessiveLinesPerFile": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "apps/quote-tools/Petsy-insurance-FE-reskin/src/root.tsx",
+        "apps/quote-tools/Petsy-insurance-FE-reskin/src/entry.client.tsx",
+        "apps/quote-tools/Petsy-insurance-FE-reskin/src/routes.ts",
+        "apps/quote-tools/Petsy-insurance-FE-reskin/react-router.config.ts",
+        "apps/quote-tools/Petsy-insurance-FE-reskin/src/views/Quote/layout.tsx",
+        "apps/quote-tools/Petsy-insurance-FE-reskin/src/views/Quote/views/*/index.tsx",
+        "apps/quote-tools/Petsy-insurance-FE-reskin/src/views/Quote/views/redirects/*.tsx",
+        "apps/quote-tools/Petsy-insurance-FE-reskin/src/views/PaymentSuccess/index.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "apps/quote-tools/Petsy-Pet/src/root.tsx",
+        "apps/quote-tools/Petsy-Pet/src/entry.client.tsx",
+        "apps/quote-tools/Petsy-Pet/src/routes.ts",
+        "apps/quote-tools/Petsy-Pet/react-router.config.ts",
+        "apps/quote-tools/Petsy-Pet/src/views/Quote/layout.tsx",
+        "apps/quote-tools/Petsy-Pet/src/views/Quote/views/**/index.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "off"
+          }
+        }
+      }
+    }
+  ],
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedVariables": "error"
+      },
+      "nursery": {
+        "noExcessiveLinesPerFile": {
+          "level": "error",
+          "options": {
+            "maxLines": 250,
+            "skipBlankLines": true
+          }
+        }
+      },
+      "performance": {
+        "noBarrelFile": "error",
+        "noReExportAll": "error",
+        "noNamespaceImport": "error"
+      },
+      "style": {
+        "noDefaultExport": "error",
+        "useImportType": "error"
+      },
+      "suspicious": {
+        "noExplicitAny": "error"
+      }
+    }
+  }
+}
