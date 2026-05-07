@@ -27,6 +27,7 @@ interface Props {
   strength?: number;
   disableGlow?: boolean;
   disableReflections?: boolean;
+  id?: string;
 }
 
 export function PureCss({
@@ -37,8 +38,10 @@ export function PureCss({
   strength = 1,
   disableGlow = false,
   disableReflections = false,
+  id,
 }: Props) {
-  const uid = useId().replace(/:/g, '');
+  const autoUid = useId().replace(/:/g, '');
+  const uid = id || autoUid;
   const rootRef = useRef<HTMLDivElement>(null);
   const [radius, setRadius] = useState(20);
   const [elSize, setElSize] = useState<[number, number]>([140, 40]);
@@ -211,7 +214,7 @@ export function PureCss({
   }, [accentColor, isDark, strength, disableReflections]);
 
   return (
-    <>
+    <React.Fragment key={uid}>
       <style>{`
         /* ── @property declarations ──
            These tell the browser HOW to interpolate custom properties.
@@ -332,6 +335,129 @@ export function PureCss({
           <div className="mfx-normalize" style={{ pointerEvents: 'auto' }}>{children}</div>
         </div>
       </div>
-    </>
+    </React.Fragment>
+  );
+}
+
+interface ReflectionProps {
+  children: ReactNode;
+  anchor: string;
+  preset?: Preset;
+  theme?: Theme;
+  side?: 'left' | 'right';
+  intensity?: number;
+}
+
+export function PureCssReflection({
+  children,
+  anchor,
+  preset = 'chromatic',
+  theme = 'dark',
+  side = 'left',
+  intensity = 0.5,
+}: ReflectionProps) {
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const colors = PALETTE[preset][theme];
+  const half = Math.ceil(colors.length / 2);
+  const colorsA = colors.slice(0, half);
+  const colorsB = colors.slice(half);
+
+  const buildReflectionStops = (cols: string[]) => {
+    const s: string[] = [];
+    const n = cols.length;
+    const span = 100 / n;
+    for (let i = 0; i < n; i++) {
+      const start = span * i;
+      s.push(`transparent ${start}%`);
+      s.push(`${cols[i]}88 ${start + span * 0.44}%`);
+      s.push(`${cols[i]} ${start + span * 0.47}%`);
+      s.push(`${cols[i]}88 ${start + span * 0.50}%`);
+      s.push(`transparent ${start + span * 0.55}%`);
+    }
+    return s.join(', ');
+  };
+
+  const stopsA = buildReflectionStops(colorsA);
+  const stopsB = buildReflectionStops(colorsB);
+
+  const maskDir = side === 'left' ? 'to right' : 'to left';
+
+  // #region agent log
+  React.useEffect(() => {
+    const el = overlayRef.current;
+    if (!el) return;
+    let count = 0;
+    const id = setInterval(() => {
+      if (count++ > 3) { clearInterval(id); return; }
+      const cs = getComputedStyle(el);
+      const anim = cs.animationName;
+      fetch('http://127.0.0.1:7455/ingest/809b94c1-440b-41c5-9fbe-6712638e649f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e43d97'},body:JSON.stringify({sessionId:'e43d97',location:'PureCss.tsx:reflection-v2',message:'reflection ring anim',data:{anim,anchor,side},timestamp:Date.now(),hypothesisId:'H3-fix'})}).catch(()=>{});
+    }, 1000);
+    return () => clearInterval(id);
+  }, [anchor, side]);
+  // #endregion
+
+  const fadeMaskDir = side === 'left' ? 'to right' : 'to left';
+
+  const ringAStyle: CSSProperties = {
+    position: 'absolute',
+    inset: 1,
+    borderRadius: 'inherit',
+    padding: 1,
+    background: `conic-gradient(from calc(var(--mfx-a-${anchor}) + 180deg), ${stopsA})`,
+    animation: `mfx-spin-a-${anchor} 36s linear infinite`,
+    WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+    WebkitMaskComposite: 'xor',
+    maskComposite: 'exclude',
+    opacity: intensity * 0.85,
+    pointerEvents: 'none',
+    filter: 'blur(4px)',
+  };
+
+  const ringBStyle: CSSProperties = {
+    position: 'absolute',
+    inset: 0,
+    borderRadius: 'inherit',
+    padding: 1,
+    background: `conic-gradient(from calc(var(--mfx-b-${anchor}) + 180deg), ${stopsB})`,
+    animation: `mfx-spin-b-${anchor} 14s ease-in-out infinite reverse`,
+    WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+    WebkitMaskComposite: 'xor',
+    maskComposite: 'exclude',
+    opacity: intensity * 0.65,
+    pointerEvents: 'none',
+  };
+
+  const fillStyle: CSSProperties = {
+    position: 'absolute',
+    inset: 0,
+    borderRadius: 'inherit',
+    background: `conic-gradient(from calc(var(--mfx-a-${anchor}) + 180deg), ${stopsA})`,
+    animation: `mfx-spin-a-${anchor} 36s linear infinite`,
+    opacity: intensity * 0.1,
+    pointerEvents: 'none',
+    filter: 'blur(6px)',
+    mixBlendMode: 'screen',
+  };
+
+  const reflectionWrapStyle: CSSProperties = {
+    position: 'absolute',
+    inset: 0,
+    borderRadius: 'inherit',
+    overflow: 'hidden',
+    pointerEvents: 'none',
+    WebkitMask: `linear-gradient(${fadeMaskDir}, white 0%, white 10%, transparent 35%)`,
+    mask: `linear-gradient(${fadeMaskDir}, white 0%, white 10%, transparent 35%)`,
+  };
+
+  return (
+    <div style={{ position: 'relative', isolation: 'isolate', display: 'inline-flex', borderRadius: 9999, overflow: 'hidden' }}>
+      {children}
+      <div style={reflectionWrapStyle} aria-hidden="true">
+        <div style={fillStyle} />
+        <div ref={overlayRef} style={ringAStyle} />
+        <div style={ringBStyle} />
+      </div>
+    </div>
   );
 }

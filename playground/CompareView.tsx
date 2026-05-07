@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { MetalFx, type MetalFxPreset, type MetalFxTheme, type MetalFxVariant } from '../src';
-import { PureCss } from './variants/PureCss';
+import { PureCss, PureCssReflection } from './variants/PureCss';
 import { ShaderMinimal } from './variants/ShaderMinimal';
 import { ShaderCssGlow } from './variants/ShaderCssGlow';
+import React from 'react';
 
 const PRESETS: MetalFxPreset[] = ['chromatic', 'silver', 'gold'];
 
@@ -96,6 +97,7 @@ export function CompareView({ theme }: CompareViewProps) {
   const [variant, setVariant] = useState<MetalFxVariant>('button');
   const [disableGlow, setDisableGlow] = useState(false);
   const [disableReflections, setDisableReflections] = useState(false);
+  const neighbourRef = useRef<HTMLButtonElement>(null);
 
   const resolvedTheme = theme === 'auto' ? 'dark' : theme;
 
@@ -164,21 +166,31 @@ export function CompareView({ theme }: CompareViewProps) {
             variant={variant}
             theme={theme}
             disableGlow={disableGlow}
+            reflectionTargets={[neighbourRef]}
           >
             {renderChild()}
           </MetalFx>
+          <button ref={neighbourRef} type="button" className="demo-pill" style={{ fontSize: 13 }}>
+            Cancel
+          </button>
         </VariantCard>
 
         <VariantCard title="Pure CSS" subtitle="conic-gradient + @property, zero JS animation">
           <PureCss
+            id="css-compare"
             preset={preset}
             theme={resolvedTheme}
             variant={variant}
             disableGlow={disableGlow}
-            disableReflections
+            disableReflections={disableReflections}
           >
             {renderChild()}
           </PureCss>
+          <PureCssReflection anchor="css-compare" preset={preset} theme={resolvedTheme} side="left">
+            <button type="button" className="demo-pill" style={{ fontSize: 13 }}>
+              Cancel
+            </button>
+          </PureCssReflection>
         </VariantCard>
 
         {/* <VariantCard title="Level 2: Shader Minimal" subtitle="WebGL ring only, no glow / reflections">

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { MetalFx, type MetalFxPreset, type MetalFxTheme, type MetalFxVariant } from '../src';
 import { CompareView } from './CompareView';
+import { CssPlayground } from './CssPlayground';
 
 const PRESETS: MetalFxPreset[] = ['chromatic', 'silver', 'gold'];
 const VARIANTS: MetalFxVariant[] = ['button', 'circle'];
 
-type Page = 'playground' | 'compare';
+type Page = 'playground' | 'compare' | 'css';
 
 const ArrowUpIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -88,6 +89,13 @@ export function App() {
           >
             Compare
           </button>
+          <button
+            type="button"
+            className={`tab-btn${page === 'css' ? ' active' : ''}`}
+            onClick={() => setPage('css')}
+          >
+            CSS Only
+          </button>
         </div>
         <button type="button" className="tab-btn" onClick={toggleTheme}>
           {theme === 'dark' ? '☀ Light' : '● Dark'}
@@ -96,6 +104,8 @@ export function App() {
 
       {page === 'compare' ? (
         <CompareView theme={theme} />
+      ) : page === 'css' ? (
+        <CssPlayground theme={theme} />
       ) : (
         <>
           {/* Controls toolbar */}
