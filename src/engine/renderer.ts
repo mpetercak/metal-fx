@@ -44,8 +44,9 @@ export interface MetalFxInstance {
   onAfterFrame?: () => void;
 }
 
-/** Size of the square region read back from the GL canvas for glow luminance sampling. */
-const GLOW_READ_SIZE = 150;
+/** Read the entire GL canvas for glow sampling — at CANONICAL_GL_SIZE*dpr the
+ *  buffer is small enough (360KB on 2× displays) that sub-rect cropping isn't
+ *  worth the coordinate mapping complexity. */
 
 interface SharedRenderer {
   glCanvas: HTMLCanvasElement;
@@ -118,8 +119,8 @@ function ensureSharedRenderer(): SharedRenderer {
     startMs: performance.now(), pausedMs: 0, pausedAtMs: null,
     rafId: 0, dpr, instances: new Set(), frameCount: 0,
     glowQueue: [], glowIdx: 0,
-    glowPixels: new Uint8Array(GLOW_READ_SIZE * GLOW_READ_SIZE * 4),
-    glowPixelsW: GLOW_READ_SIZE, glowPixelsH: GLOW_READ_SIZE,
+    glowPixels: new Uint8Array(glCanvas.width * glCanvas.height * 4),
+    glowPixelsW: glCanvas.width, glowPixelsH: glCanvas.height,
   };
   return SHARED;
 }
@@ -141,16 +142,12 @@ function ensureGlowPixels(): void {
   _lastReadbackMs = now;
   const { gl, glCanvas } = SHARED;
   const cw = glCanvas.width, ch = glCanvas.height;
-  const rw = Math.min(GLOW_READ_SIZE, cw);
-  const rh = Math.min(GLOW_READ_SIZE, ch);
-  if (SHARED.glowPixelsW !== rw || SHARED.glowPixelsH !== rh) {
-    SHARED.glowPixelsW = rw;
-    SHARED.glowPixelsH = rh;
-    SHARED.glowPixels = new Uint8Array(rw * rh * 4);
+  if (SHARED.glowPixelsW !== cw || SHARED.glowPixelsH !== ch) {
+    SHARED.glowPixelsW = cw;
+    SHARED.glowPixelsH = ch;
+    SHARED.glowPixels = new Uint8Array(cw * ch * 4);
   }
-  const ox = Math.max(0, Math.floor((cw - rw) / 2));
-  const oy = Math.max(0, Math.floor((ch - rh) / 2));
-  gl.readPixels(ox, oy, rw, rh, gl.RGBA, gl.UNSIGNED_BYTE, SHARED.glowPixels);
+  gl.readPixels(0, 0, cw, ch, gl.RGBA, gl.UNSIGNED_BYTE, SHARED.glowPixels);
 }
 
 /**
@@ -165,7 +162,7 @@ function ensureGlowPixels(): void {
  */
 function mapToGlowBuf(inst: MetalFxInstance, cssPxX: number, cssPxY: number): { bx: number; by: number } {
   if (!SHARED) return { bx: 0, by: 0 };
-  const { glCanvas, glowPixelsW: rw, glowPixelsH: rh } = SHARED;
+  const { glCanvas } = SHARED;
   const cw = glCanvas.width, ch = glCanvas.height;
   const dpr = inst.dpr;
   const dw = inst.cssWidth * dpr, dh = inst.cssHeight * dpr;
@@ -178,10 +175,8 @@ function mapToGlowBuf(inst: MetalFxInstance, cssPxX: number, cssPxY: number): { 
   const sy = (ch - srcH) / 2;
   const glX = sx + (cssPxX / inst.cssWidth) * srcW;
   const glY = sy + (cssPxY / inst.cssHeight) * srcH;
-  const ox = Math.max(0, Math.floor((cw - rw) / 2));
-  const oy = Math.max(0, Math.floor((ch - rh) / 2));
-  const bx = Math.round(glX - ox);
-  const by = Math.round((ch - 1 - glY) - oy);
+  const bx = Math.round(glX);
+  const by = Math.round(ch - 1 - glY);
   return { bx, by };
 }
 
