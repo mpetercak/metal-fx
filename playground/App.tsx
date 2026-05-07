@@ -3,6 +3,7 @@ import { NavLink, Route, Routes } from 'react-router-dom';
 import { MetalFx, type MetalFxPreset, type MetalFxTheme, type MetalFxVariant } from '../src';
 import { CompareView } from './CompareView';
 import { CssPlayground } from './CssPlayground';
+import { GsapPlayground } from './GsapPlayground';
 import React from 'react';
 
 const PRESETS: MetalFxPreset[] = ['chromatic', 'silver', 'gold'];
@@ -83,6 +84,9 @@ export function App() {
           <NavLink to="/css" className={({ isActive }) => `tab-btn${isActive ? ' active' : ''}`}>
             CSS Only
           </NavLink>
+          <NavLink to="/gsap" className={({ isActive }) => `tab-btn${isActive ? ' active' : ''}`}>
+            GSAP
+          </NavLink>
         </div>
         <button type="button" className="tab-btn" onClick={toggleTheme}>
           {theme === 'dark' ? '☀ Light' : '● Dark'}
@@ -92,6 +96,7 @@ export function App() {
       <Routes>
         <Route path="/compare" element={<CompareView theme={theme} />} />
         <Route path="/css" element={<CssPlayground theme={theme} />} />
+        <Route path="/gsap" element={<GsapPlayground theme={theme} />} />
         <Route path="*" element={
           <>
           {/* Controls toolbar */}

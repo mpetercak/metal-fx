@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { MetalFx, type MetalFxPreset, type MetalFxTheme, type MetalFxVariant } from "../src";
 import { PureCss } from "./variants/PureCss";
 import { PureCssReflection } from "./variants/PureCssReflection";
+import { WebGlRing } from "./variants/WebGlRing";
 
 const PRESETS: MetalFxPreset[] = ['chromatic', 'silver', 'gold'];
 
@@ -154,7 +155,7 @@ export function CompareView({ theme }: CompareViewProps) {
 
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(2, 1fr)',
+        gridTemplateColumns: 'repeat(3, 1fr)',
         gap: 16,
       }}>
         <VariantCard title="Current (Full)" subtitle="WebGL + SVG glow + canvas reflections">
@@ -191,20 +192,9 @@ export function CompareView({ theme }: CompareViewProps) {
           </PureCssReflection>
         </VariantCard>
 
-        {/* <VariantCard title="Level 2: Shader Minimal" subtitle="WebGL ring only, no glow / reflections">
-          <ShaderMinimal
-            key={`min-${variant}-${preset}`}
-            preset={preset}
-            theme={resolvedTheme}
-            variant={variant}
-          >
-            {renderChild()}
-          </ShaderMinimal>
-        </VariantCard> */}
-
-        {/* <VariantCard title="Level 3: Shader + CSS Effects" subtitle="WebGL ring + CSS glow + CSS box-shadow spill">
-          <ShaderCssGlow
-            key={`css-${variant}-${preset}`}
+        <VariantCard title="WebGL Ring" subtitle="WebGL conic ring + CSS glow + CSS reflections">
+          <WebGlRing
+            key={`gl-${variant}-${preset}`}
             preset={preset}
             theme={resolvedTheme}
             variant={variant}
@@ -212,8 +202,8 @@ export function CompareView({ theme }: CompareViewProps) {
             disableReflections={disableReflections}
           >
             {renderChild()}
-          </ShaderCssGlow>
-        </VariantCard> */}
+          </WebGlRing>
+        </VariantCard>
       </div>
     </div>
   );
