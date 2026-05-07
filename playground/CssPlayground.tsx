@@ -1,24 +1,55 @@
-import { useState } from 'react';
-import type { MetalFxPreset, MetalFxTheme, MetalFxVariant } from '../src';
-import { PureCss, PureCssReflection } from './variants/PureCss';
+import { useState } from "react";
+import type { MetalFxPreset, MetalFxTheme, MetalFxVariant } from "../src";
+import { PureCss } from "./variants/PureCss";
+import { PureCssReflection } from "./variants/PureCssReflection";
 
-const PRESETS: MetalFxPreset[] = ['chromatic', 'silver', 'gold'];
-const VARIANTS: MetalFxVariant[] = ['button', 'circle'];
+const PRESETS: MetalFxPreset[] = ["chromatic", "silver", "gold"];
+const VARIANTS: MetalFxVariant[] = ["button", "circle"];
 
 const ArrowUpIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
     <path d="M8 12V4M4 7l4-4 4 4" />
   </svg>
 );
 
 const ChevronIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
     <path d="M6 4l4 4-4 4" />
   </svg>
 );
 
 const SearchIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
     <circle cx="7" cy="7" r="4.5" />
     <path d="M10.5 10.5L14 14" />
   </svg>
@@ -29,13 +60,13 @@ interface CssPlaygroundProps {
 }
 
 export function CssPlayground({ theme }: CssPlaygroundProps) {
-  const [variant, setVariant] = useState<MetalFxVariant>('button');
-  const [preset, setPreset] = useState<MetalFxPreset>('chromatic');
+  const [variant, setVariant] = useState<MetalFxVariant>("button");
+  const [preset, setPreset] = useState<MetalFxPreset>("chromatic");
   const [strength, setStrength] = useState(1);
   const [disableGlow, setDisableGlow] = useState(false);
   const [disableReflections, setDisableReflections] = useState(false);
 
-  const resolvedTheme = theme === 'auto' ? 'dark' : theme;
+  const resolvedTheme = theme === "auto" ? "dark" : theme;
 
   return (
     <>
@@ -47,7 +78,7 @@ export function CssPlayground({ theme }: CssPlaygroundProps) {
               <button
                 key={v}
                 type="button"
-                className={`tab-btn${variant === v ? ' active' : ''}`}
+                className={`tab-btn${variant === v ? " active" : ""}`}
                 onClick={() => setVariant(v)}
               >
                 {v.charAt(0).toUpperCase() + v.slice(1)}
@@ -63,7 +94,7 @@ export function CssPlayground({ theme }: CssPlaygroundProps) {
               <button
                 key={p}
                 type="button"
-                className={`tab-btn${preset === p ? ' active' : ''}`}
+                className={`tab-btn${preset === p ? " active" : ""}`}
                 onClick={() => setPreset(p)}
               >
                 {p.charAt(0).toUpperCase() + p.slice(1)}
@@ -87,16 +118,38 @@ export function CssPlayground({ theme }: CssPlaygroundProps) {
           />
         </div>
 
-        <div className="pg-control-group" style={{ justifyContent: 'flex-end' }}>
-          <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+        <div className="pg-control-group" style={{ justifyContent: "flex-end" }}>
+          <label
+            style={{
+              fontSize: 12,
+              color: "var(--text-muted)",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              cursor: "pointer"
+            }}
+          >
             <input type="checkbox" checked={disableGlow} onChange={(e) => setDisableGlow(e.target.checked)} />
             No glow
           </label>
         </div>
 
-        <div className="pg-control-group" style={{ justifyContent: 'flex-end' }}>
-          <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-            <input type="checkbox" checked={disableReflections} onChange={(e) => setDisableReflections(e.target.checked)} />
+        <div className="pg-control-group" style={{ justifyContent: "flex-end" }}>
+          <label
+            style={{
+              fontSize: 12,
+              color: "var(--text-muted)",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              cursor: "pointer"
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={disableReflections}
+              onChange={(e) => setDisableReflections(e.target.checked)}
+            />
             No reflections
           </label>
         </div>
@@ -112,7 +165,7 @@ export function CssPlayground({ theme }: CssPlaygroundProps) {
           disableGlow={disableGlow}
           disableReflections={disableReflections}
         >
-          {variant === 'circle' ? (
+          {variant === "circle" ? (
             <button type="button" className="demo-circle">
               <ArrowUpIcon />
             </button>
@@ -125,17 +178,23 @@ export function CssPlayground({ theme }: CssPlaygroundProps) {
       </div>
 
       <hr className="pg-divider" />
-      <h2 className="section-title" style={{ marginBottom: 16 }}>Examples</h2>
+      <h2 className="section-title" style={{ marginBottom: 16 }}>
+        Examples
+      </h2>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div className="example-card">
           <div className="mock-chat">
             <input className="mock-chat-input" placeholder="Build anything..." readOnly />
             <div className="mock-chat-row">
               <div className="mock-plus-btn">+</div>
               <div style={{ flex: 1 }} />
-              <div className="mock-chip">Agent <ChevronIcon /></div>
-              <div className="mock-chip">Auto <ChevronIcon /></div>
+              <div className="mock-chip">
+                Agent <ChevronIcon />
+              </div>
+              <div className="mock-chip">
+                Auto <ChevronIcon />
+              </div>
               <PureCss id="css-circle" preset="gold" theme={resolvedTheme} variant="circle" disableGlow={disableGlow}>
                 <button type="button" className="demo-circle" style={{ width: 36, height: 36, borderRadius: 18 }}>
                   <ArrowUpIcon />
@@ -147,7 +206,7 @@ export function CssPlayground({ theme }: CssPlaygroundProps) {
 
         <div className="example-card">
           <div className="ui-row">
-            <PureCssReflection anchor="css-toolbar" preset={preset} theme={resolvedTheme} side="right">
+            <PureCssReflection preset={preset} theme={resolvedTheme} side="right">
               <div className="mock-search">
                 <SearchIcon />
                 <span>Search</span>
@@ -160,10 +219,14 @@ export function CssPlayground({ theme }: CssPlaygroundProps) {
               disableGlow={disableGlow}
               disableReflections={disableReflections}
             >
-              <button type="button" className="demo-pill">Upgrade to Pro</button>
+              <button type="button" className="demo-pill">
+                Upgrade to Pro
+              </button>
             </PureCss>
-            <PureCssReflection anchor="css-toolbar" preset={preset} theme={resolvedTheme} side="left">
-              <button type="button" className="mock-dots">···</button>
+            <PureCssReflection preset={preset} theme={resolvedTheme} side="left">
+              <button type="button" className="mock-dots">
+                ···
+              </button>
             </PureCssReflection>
           </div>
         </div>

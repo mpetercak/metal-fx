@@ -1,9 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { MetalFx, type MetalFxPreset, type MetalFxTheme, type MetalFxVariant } from '../src';
-import { PureCss, PureCssReflection } from './variants/PureCss';
-import { ShaderMinimal } from './variants/ShaderMinimal';
-import { ShaderCssGlow } from './variants/ShaderCssGlow';
-import React from 'react';
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import { MetalFx, type MetalFxPreset, type MetalFxTheme, type MetalFxVariant } from "../src";
+import { PureCss } from "./variants/PureCss";
+import { PureCssReflection } from "./variants/PureCssReflection";
 
 const PRESETS: MetalFxPreset[] = ['chromatic', 'silver', 'gold'];
 
@@ -186,7 +184,7 @@ export function CompareView({ theme }: CompareViewProps) {
           >
             {renderChild()}
           </PureCss>
-          <PureCssReflection anchor="css-compare" preset={preset} theme={resolvedTheme} side="left">
+          <PureCssReflection preset={preset} theme={resolvedTheme} side="left">
             <button type="button" className="demo-pill" style={{ fontSize: 13 }}>
               Cancel
             </button>
