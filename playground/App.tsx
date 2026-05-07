@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import { NavLink, Route, Routes } from 'react-router-dom';
 import { MetalFx, type MetalFxPreset, type MetalFxTheme, type MetalFxVariant } from '../src';
 import { CompareView } from './CompareView';
 import { CssPlayground } from './CssPlayground';
+import React from 'react';
 
 const PRESETS: MetalFxPreset[] = ['chromatic', 'silver', 'gold'];
 const VARIANTS: MetalFxVariant[] = ['button', 'circle'];
-
-type Page = 'playground' | 'compare' | 'css';
 
 const ArrowUpIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -43,7 +43,6 @@ function buildSnippet(variant: MetalFxVariant, preset: MetalFxPreset, strength: 
 }
 
 export function App() {
-  const [page, setPage] = useState<Page>('playground');
   const [theme, setTheme] = useState<MetalFxTheme>('dark');
   const [variant, setVariant] = useState<MetalFxVariant>('button');
   const [preset, setPreset] = useState<MetalFxPreset>('chromatic');
@@ -75,39 +74,26 @@ export function App() {
       {/* Header */}
       <div className="pg-header">
         <div style={{ display: 'flex', gap: 4 }}>
-          <button
-            type="button"
-            className={`tab-btn${page === 'playground' ? ' active' : ''}`}
-            onClick={() => setPage('playground')}
-          >
+          <NavLink to="/" end className={({ isActive }) => `tab-btn${isActive ? ' active' : ''}`}>
             Playground
-          </button>
-          <button
-            type="button"
-            className={`tab-btn${page === 'compare' ? ' active' : ''}`}
-            onClick={() => setPage('compare')}
-          >
+          </NavLink>
+          <NavLink to="/compare" className={({ isActive }) => `tab-btn${isActive ? ' active' : ''}`}>
             Compare
-          </button>
-          <button
-            type="button"
-            className={`tab-btn${page === 'css' ? ' active' : ''}`}
-            onClick={() => setPage('css')}
-          >
+          </NavLink>
+          <NavLink to="/css" className={({ isActive }) => `tab-btn${isActive ? ' active' : ''}`}>
             CSS Only
-          </button>
+          </NavLink>
         </div>
         <button type="button" className="tab-btn" onClick={toggleTheme}>
           {theme === 'dark' ? '☀ Light' : '● Dark'}
         </button>
       </div>
 
-      {page === 'compare' ? (
-        <CompareView theme={theme} />
-      ) : page === 'css' ? (
-        <CssPlayground theme={theme} />
-      ) : (
-        <>
+      <Routes>
+        <Route path="/compare" element={<CompareView theme={theme} />} />
+        <Route path="/css" element={<CssPlayground theme={theme} />} />
+        <Route path="*" element={
+          <>
           {/* Controls toolbar */}
           <div className="pg-toolbar">
             <div className="pg-control-group">
@@ -255,7 +241,8 @@ export function App() {
             </div>
           </div>
         </>
-      )}
+        } />
+      </Routes>
     </div>
   );
 }
