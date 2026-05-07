@@ -20,6 +20,13 @@ export const PALETTE: Record<Preset, Record<Theme, string[]>> = {
 
 export const GLOW_ANGLES = [0, 140, 200, 290];
 
+export const RING_STEPS = 64;
+
+export const SPIN_A_DURATION = 24;
+export const SPIN_B_DURATION = 14;
+export const GLOW_GA_DURATION = 18;
+export const GLOW_GB_DURATION = 14;
+
 export function getBaseKey(preset: string, theme: string): string {
   return `${preset}-${theme}`;
 }

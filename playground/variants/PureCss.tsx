@@ -2,9 +2,14 @@ import React, { type CSSProperties, type ReactNode, useEffect, useId, useMemo, u
 import {
   buildStops,
   GLOW_ANGLES,
+  GLOW_GA_DURATION,
+  GLOW_GB_DURATION,
   getBaseKey,
   PALETTE,
   type Preset,
+  RING_STEPS,
+  SPIN_A_DURATION,
+  SPIN_B_DURATION,
   type Theme,
   usePureCssStyles
 } from "./pureCssStyles";
@@ -146,7 +151,7 @@ export function PureCss({
       ...RING_BASE,
       background: `conic-gradient(from var(--mfx-a-${baseKey}), ${stopsA})`,
       opacity: strength * 0.85,
-      animation: `mfx-spin-a-${baseKey} 36s linear infinite`,
+      animation: `mfx-spin-a-${baseKey} ${SPIN_A_DURATION}s steps(${RING_STEPS}, end) infinite`,
       animationPlayState: playState
     }),
     [baseKey, stopsA, strength, playState]
@@ -157,7 +162,7 @@ export function PureCss({
       ...RING_BASE,
       background: `conic-gradient(from var(--mfx-b-${baseKey}), ${stopsB})`,
       opacity: strength * 0.65,
-      animation: `mfx-spin-b-${baseKey} 14s ease-in-out infinite reverse`,
+      animation: `mfx-spin-b-${baseKey} ${SPIN_B_DURATION}s steps(${RING_STEPS}, end) infinite reverse`,
       animationPlayState: playState
     }),
     [baseKey, stopsB, strength, playState]
@@ -177,10 +182,10 @@ export function PureCss({
       offsetPath: `rect(0 100% 100% 0 round ${radius}px)`,
       willChange: "offset-distance, opacity",
       animation: [
-        `mfx-glow-pos-${uid} 36s linear infinite`,
-        `mfx-glow-fade-${styleKey} 36s ease-in-out infinite`,
-        `mfx-glow-ga-${baseKey} 18s ease-in-out infinite`,
-        `mfx-glow-gb-${baseKey} 14s ease-in-out infinite reverse`
+        `mfx-glow-pos-${uid} ${SPIN_A_DURATION}s step-end infinite`,
+        `mfx-glow-fade-${styleKey} ${SPIN_A_DURATION}s ease-in-out infinite`,
+        `mfx-glow-ga-${baseKey} ${GLOW_GA_DURATION}s ease-in-out infinite`,
+        `mfx-glow-gb-${baseKey} ${GLOW_GB_DURATION}s ease-in-out infinite reverse`
       ].join(","),
       animationPlayState: playState
     };
@@ -210,7 +215,7 @@ export function PureCss({
       borderRadius: radius,
       isolation: "isolate",
       overflow: "visible",
-      contain: "layout style paint"
+      contain: "layout style"
     }),
     [bg, radius]
   );
@@ -219,10 +224,10 @@ export function PureCss({
     ? ""
     : `
 @keyframes mfx-glow-pos-${uid}{
-  0%,23%{offset-distance:${glowSpots[0]}%}
-  25%,48%{offset-distance:${glowSpots[1]}%}
-  50%,73%{offset-distance:${glowSpots[2]}%}
-  75%,98%{offset-distance:${glowSpots[3]}%}
+  0%,24%{offset-distance:${glowSpots[0]}%}
+  25%,49%{offset-distance:${glowSpots[1]}%}
+  50%,74%{offset-distance:${glowSpots[2]}%}
+  75%,99%{offset-distance:${glowSpots[3]}%}
   100%{offset-distance:${glowSpots[0]}%}
 }`;
 

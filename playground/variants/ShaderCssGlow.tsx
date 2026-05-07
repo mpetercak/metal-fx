@@ -8,6 +8,7 @@ import {
   type LiteInstance,
 } from '../engine/lite-renderer';
 import type { PresetName, PresetTheme } from '../../src/engine/presets';
+import React from 'react';
 
 const ACCENT: Record<PresetName, Record<PresetTheme, string>> = {
   chromatic: { dark: '#aae8ff', light: '#b0e9bc' },

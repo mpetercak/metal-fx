@@ -1,5 +1,5 @@
 import { type CSSProperties, type ReactNode, useMemo } from "react";
-import { buildReflectionStops, getBaseKey, PALETTE, type Preset, type Theme } from "./pureCssStyles";
+import { buildReflectionStops, getBaseKey, PALETTE, type Preset, RING_STEPS, SPIN_A_DURATION, SPIN_B_DURATION, type Theme } from "./pureCssStyles";
 
 interface ReflectionProps {
   children: ReactNode;
@@ -32,7 +32,7 @@ export function PureCssReflection({
       borderRadius: "inherit",
       padding: 1,
       background: `conic-gradient(from calc(var(--mfx-a-${baseKey}) + 180deg), ${stopsA})`,
-      animation: `mfx-spin-a-${baseKey} 36s linear infinite`,
+      animation: `mfx-spin-a-${baseKey} ${SPIN_A_DURATION}s steps(${RING_STEPS}, end) infinite`,
       WebkitMask: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
       WebkitMaskComposite: "xor",
       maskComposite: "exclude",
@@ -51,7 +51,7 @@ export function PureCssReflection({
       borderRadius: "inherit",
       padding: 1,
       background: `conic-gradient(from calc(var(--mfx-b-${baseKey}) + 180deg), ${stopsB})`,
-      animation: `mfx-spin-b-${baseKey} 14s ease-in-out infinite reverse`,
+      animation: `mfx-spin-b-${baseKey} ${SPIN_B_DURATION}s steps(${RING_STEPS}, end) infinite reverse`,
       WebkitMask: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
       WebkitMaskComposite: "xor",
       maskComposite: "exclude",
@@ -68,7 +68,7 @@ export function PureCssReflection({
       inset: 0,
       borderRadius: "inherit",
       background: `conic-gradient(from calc(var(--mfx-a-${baseKey}) + 180deg), ${stopsA})`,
-      animation: `mfx-spin-a-${baseKey} 36s linear infinite`,
+      animation: `mfx-spin-a-${baseKey} ${SPIN_A_DURATION}s steps(${RING_STEPS}, end) infinite`,
       opacity: intensity * 0.1,
       pointerEvents: "none",
       filter: "blur(6px)",
