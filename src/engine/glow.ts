@@ -12,6 +12,7 @@
  */
 import type { MetalFxInstance, ShaderRGB } from './renderer';
 import { sampleShaderLumAt, sampleShaderRGBAt, sampleShaderRGBChromatic } from './renderer';
+import { type Tween, ease, tween, tweenStart, tweenTick } from './tween';
 
 // ─── Constants ────────────────────────────────────────────────────────────
 
@@ -48,7 +49,6 @@ const REF_W = 140, REF_H = 40, REF_R = 20;
 interface GlowOptions { width: number; height: number; cornerRadius: number; kind: 'pill' | 'circle' }
 interface Pt { x: number; y: number }
 interface PerimSample extends Pt { arc: number }
-type Phase = 'idle' | 'fadingOut' | 'fadingIn';
 
 export interface GlowHandles {
   svg: SVGSVGElement;
@@ -60,9 +60,9 @@ export interface GlowHandles {
   width: number; height: number; cornerRadius: number; kind: 'pill' | 'circle';
   perim: PerimSample[];
   currentIdx: number; appearedAt: number; glowOpacity: number;
-  relocPhase: Phase; relocStartedAt: number; relocFromOp: number; relocToOp: number; relocNextIdx: number;
+  relocTween: Tween | null; relocNextIdx: number;
   wanderS: number; wanderTargetS: number; wanderFrames: number;
-  tintPrev: ShaderRGB; tintTarget: ShaderRGB; tintLastSampleAt: number;
+  tintFrom: ShaderRGB; tintTarget: ShaderRGB; tintTween: Tween | null; tintHoldUntil: number;
   lastHaloStroke: string; lastExtraStroke: string;
 }
 
@@ -220,9 +220,9 @@ export function injectGlow(container: HTMLElement, opts: GlowOptions): GlowHandl
     width: opts.width, height: opts.height, cornerRadius: opts.cornerRadius, kind: opts.kind,
     perim: buildPerimTable(opts),
     currentIdx: 0, appearedAt: 0, glowOpacity: 0,
-    relocPhase: 'idle', relocStartedAt: 0, relocFromOp: 0, relocToOp: 0, relocNextIdx: -1,
+    relocTween: null, relocNextIdx: -1,
     wanderS: 0, wanderTargetS: 0, wanderFrames: 0,
-    tintPrev: { r: 255, g: 255, b: 255 }, tintTarget: { r: 255, g: 255, b: 255 }, tintLastSampleAt: -1,
+    tintFrom: { r: 255, g: 255, b: 255 }, tintTarget: { r: 255, g: 255, b: 255 }, tintTween: null, tintHoldUntil: 0,
     lastHaloStroke: '', lastExtraStroke: '',
   };
 }
@@ -275,40 +275,36 @@ export function updateGlow(h: GlowHandles, inst: MetalFxInstance, nowMs: number,
     if (i === h.currentIdx) curLum = lum;
   }
 
-  // Step 2: state machine
+  // Step 2: relocation / opacity
   const dwellActive = h.appearedAt > 0 && nowMs - h.appearedAt < MIN_DWELL_MS;
   const targetOp = BASE_OP + (PEAK_OP - BASE_OP) * smoothstep(LO, HI, curLum);
   const rivalDominates = !dwellActive && maxLum - curLum > RELOCATE_DELTA;
 
-  if (h.relocPhase === 'idle') {
+  if (!h.relocTween || h.relocTween.done) {
     if (h.appearedAt === 0) {
       h.currentIdx = maxIdx; h.appearedAt = nowMs;
       h.wanderS = 0; h.wanderTargetS = 0; h.wanderFrames = 0;
-      h.relocPhase = 'fadingIn'; h.relocStartedAt = nowMs; h.relocFromOp = 0; h.relocToOp = targetOp;
+      h.relocTween = tween(0, targetOp, RELOC_FADE_MS, ease.smoothstep);
+      tweenStart(h.relocTween, nowMs);
+    } else if (h.relocTween?.done && h.relocTween.to === 0) {
+      h.currentIdx = h.relocNextIdx; h.appearedAt = nowMs;
+      h.wanderS = 0; h.wanderTargetS = 0; h.wanderFrames = 0;
+      const np = perim[h.currentIdx];
+      const nl = sampleShaderLumAt(inst, np.x, np.y, halfWin);
+      const fadeInTarget = BASE_OP + (PEAK_OP - BASE_OP) * smoothstep(LO, HI, nl);
+      h.relocTween = tween(0, fadeInTarget, RELOC_FADE_MS, ease.smoothstep);
+      tweenStart(h.relocTween, nowMs);
     } else if (rivalDominates) {
-      h.relocPhase = 'fadingOut'; h.relocStartedAt = nowMs;
-      h.relocFromOp = h.glowOpacity; h.relocToOp = 0; h.relocNextIdx = maxIdx;
+      h.relocNextIdx = maxIdx;
+      h.relocTween = tween(h.glowOpacity, 0, RELOC_FADE_MS, ease.smoothstep);
+      tweenStart(h.relocTween, nowMs);
     } else {
       h.glowOpacity += (targetOp - h.glowOpacity) * FADE_RATE;
     }
   }
 
-  if (h.relocPhase === 'fadingOut') {
-    const t = Math.min(1, (nowMs - h.relocStartedAt) / RELOC_FADE_MS);
-    const e = t * t * (3 - 2 * t);
-    h.glowOpacity = h.relocFromOp + (h.relocToOp - h.relocFromOp) * e;
-    if (t >= 1) {
-      h.currentIdx = h.relocNextIdx; h.appearedAt = nowMs;
-      h.wanderS = 0; h.wanderTargetS = 0; h.wanderFrames = 0;
-      const np = perim[h.currentIdx];
-      const nl = sampleShaderLumAt(inst, np.x, np.y, halfWin);
-      h.relocPhase = 'fadingIn'; h.relocStartedAt = nowMs; h.relocFromOp = 0;
-      h.relocToOp = BASE_OP + (PEAK_OP - BASE_OP) * smoothstep(LO, HI, nl);
-    }
-  } else if (h.relocPhase === 'fadingIn') {
-    const t = Math.min(1, (nowMs - h.relocStartedAt) / RELOC_FADE_MS);
-    h.glowOpacity = h.relocFromOp + (h.relocToOp - h.relocFromOp) * t * t * (3 - 2 * t);
-    if (t >= 1) h.relocPhase = 'idle';
+  if (h.relocTween && !h.relocTween.done) {
+    h.glowOpacity = tweenTick(h.relocTween, nowMs);
   }
   h.glowOpacity = Math.max(0, Math.min(1, h.glowOpacity));
 
@@ -339,25 +335,41 @@ export function updateGlow(h: GlowHandles, inst: MetalFxInstance, nowMs: number,
     ? sampleShaderRGBChromatic(inst, blobPt.x, blobPt.y, halfWin)
     : sampleShaderRGBAt(inst, blobPt.x, blobPt.y, halfWin);
 
+  if (!h.tintTween) {
+    h.tintFrom = { ...samp }; h.tintTarget = { ...samp };
+    h.tintTween = tween(0, 1, TINT_FADE_MS);
+    tweenStart(h.tintTween, nowMs);
+    h.tintHoldUntil = light ? 0 : nowMs + TINT_HOLD_MS;
+  } else if (h.tintTween.done) {
+    if (light) {
+      h.tintFrom = {
+        r: h.tintFrom.r + (h.tintTarget.r - h.tintFrom.r) * h.tintTween.val,
+        g: h.tintFrom.g + (h.tintTarget.g - h.tintFrom.g) * h.tintTween.val,
+        b: h.tintFrom.b + (h.tintTarget.b - h.tintFrom.b) * h.tintTween.val,
+      };
+      h.tintTarget = { ...samp };
+      h.tintTween = tween(0, 1, TINT_FADE_MS);
+      tweenStart(h.tintTween, nowMs);
+    } else if (nowMs >= h.tintHoldUntil) {
+      h.tintFrom = { ...h.tintTarget };
+      h.tintTarget = { ...samp };
+      h.tintTween = tween(0, 1, TINT_FADE_MS);
+      tweenStart(h.tintTween, nowMs);
+      h.tintHoldUntil = nowMs + TINT_HOLD_MS;
+    }
+  }
+  tweenTick(h.tintTween!, nowMs);
+  const ft = h.tintTween!.val;
+
   let tR: number, tG: number, tB: number;
   if (light) {
-    if (h.tintLastSampleAt < 0) { h.tintPrev = { ...samp }; h.tintTarget = { ...samp }; h.tintLastSampleAt = nowMs; }
-    else {
-      const ft = Math.min(1, (nowMs - h.tintLastSampleAt) / TINT_FADE_MS);
-      h.tintPrev = { r: h.tintPrev.r + (h.tintTarget.r - h.tintPrev.r) * ft, g: h.tintPrev.g + (h.tintTarget.g - h.tintPrev.g) * ft, b: h.tintPrev.b + (h.tintTarget.b - h.tintPrev.b) * ft };
-      h.tintTarget = { ...samp }; h.tintLastSampleAt = nowMs;
-    }
-    const ft = Math.min(1, (nowMs - h.tintLastSampleAt) / TINT_FADE_MS);
-    tR = Math.round(h.tintPrev.r + (h.tintTarget.r - h.tintPrev.r) * ft);
-    tG = Math.round(h.tintPrev.g + (h.tintTarget.g - h.tintPrev.g) * ft);
-    tB = Math.round(h.tintPrev.b + (h.tintTarget.b - h.tintPrev.b) * ft);
+    tR = Math.round(h.tintFrom.r + (h.tintTarget.r - h.tintFrom.r) * ft);
+    tG = Math.round(h.tintFrom.g + (h.tintTarget.g - h.tintFrom.g) * ft);
+    tB = Math.round(h.tintFrom.b + (h.tintTarget.b - h.tintFrom.b) * ft);
   } else {
-    if (h.tintLastSampleAt < 0) { h.tintPrev = { ...samp }; h.tintTarget = { ...samp }; h.tintLastSampleAt = nowMs; }
-    else if (nowMs - h.tintLastSampleAt >= TINT_HOLD_MS) { h.tintPrev = { ...h.tintTarget }; h.tintTarget = { ...samp }; h.tintLastSampleAt = nowMs; }
-    const ft = Math.min(1, (nowMs - h.tintLastSampleAt) / TINT_FADE_MS);
-    const hR = h.tintPrev.r + (h.tintTarget.r - h.tintPrev.r) * ft;
-    const hG = h.tintPrev.g + (h.tintTarget.g - h.tintPrev.g) * ft;
-    const hB = h.tintPrev.b + (h.tintTarget.b - h.tintPrev.b) * ft;
+    const hR = h.tintFrom.r + (h.tintTarget.r - h.tintFrom.r) * ft;
+    const hG = h.tintFrom.g + (h.tintTarget.g - h.tintFrom.g) * ft;
+    const hB = h.tintFrom.b + (h.tintTarget.b - h.tintFrom.b) * ft;
     const peak = Math.max(hR, hG, hB) || 1;
     tR = Math.round(255 * (hR / peak)); tG = Math.round(255 * (hG / peak)); tB = Math.round(255 * (hB / peak));
   }

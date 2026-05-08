@@ -41,3 +41,12 @@ export {
   type PresetName,
   type PresetTheme,
 } from './presets';
+
+export {
+  tween,
+  tweenStart,
+  tweenTick,
+  ease,
+  type Tween,
+  type EaseFn,
+} from './tween';
