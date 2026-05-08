@@ -8,24 +8,22 @@ import {
   useState,
   type CSSProperties,
 } from 'react';
+import type { MetalFxInstance } from './engine/renderer/core';
 import {
-  addReflectionTarget,
   createInstance,
   destroyInstance,
-  injectGlow,
   pauseShared,
   registerGlowInstance,
-  removeReflectionTarget,
   resumeShared,
-  scheduleReflectionPaint,
   setGlowCallback,
   setInstanceVisible,
   setSharedPreset,
   unregisterGlowInstance,
-  updateGlow,
   updateInstance,
-  type MetalFxInstance,
-} from './engine';
+} from './engine/renderer/loop';
+import { injectGlow, updateGlow } from './engine/glow/glow';
+import { addReflectionTarget, removeReflectionTarget } from './engine/reflection/paint';
+import { scheduleReflectionPaint } from './engine/animationLoop';
 import { ensureStylesInjected } from './styles';
 import type { MetalFxProps, MetalFxTheme } from './types';
 

@@ -5,7 +5,7 @@
  * temporal stepping completely. The scheduler coalesces rapid calls and
  * skips frames that arrive faster than the target interval.
  */
-import { paintReflections } from './reflection';
+import { paintReflections } from './reflection/paint';
 
 let scheduled = false;
 let lastReflectionMs = 0;

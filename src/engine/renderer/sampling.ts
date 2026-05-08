@@ -1,0 +1,118 @@
+/**
+ * Pixel readback and luminance/colour sampling from the shared GL canvas.
+ *
+ * All glow luminance/color sampling reads from a shared pixel buffer
+ * (SHARED.glowPixels). The buffer is refreshed via gl.readPixels at most
+ * every GLOW_READBACK_INTERVAL_MS to avoid the expensive GPU→CPU pipeline
+ * flush on every frame. The plasma shader evolves slowly so 200ms-stale
+ * data is visually indistinguishable.
+ */
+import { SHARED, CANONICAL_PILL_W, CANONICAL_PILL_H, type MetalFxInstance, type ShaderRGB } from './core';
+
+const GLOW_READBACK_INTERVAL_MS = 300;
+let _lastReadbackMs = 0;
+
+function ensureGlowPixels(): void {
+  if (!SHARED) return;
+  const now = performance.now();
+  if (now - _lastReadbackMs < GLOW_READBACK_INTERVAL_MS) return;
+  _lastReadbackMs = now;
+  const { gl, glCanvas } = SHARED;
+  const cw = glCanvas.width, ch = glCanvas.height;
+  if (SHARED.glowPixelsW !== cw || SHARED.glowPixelsH !== ch) {
+    SHARED.glowPixelsW = cw;
+    SHARED.glowPixelsH = ch;
+    SHARED.glowPixels = new Uint8Array(cw * ch * 4);
+  }
+  gl.readPixels(0, 0, cw, ch, gl.RGBA, gl.UNSIGNED_BYTE, SHARED.glowPixels);
+}
+
+/**
+ * Map per-instance CSS-px glow coordinates to the shared GL pixel buffer.
+ *
+ * The GL canvas is shared across all instances. Each instance "sees" a
+ * different crop of it (computed identically to copyShaderToInstance).
+ * This function reverses that mapping: given a CSS-px coordinate on the
+ * instance, it returns the (bx, by) index into SHARED.glowPixels.
+ *
+ * readPixels stores rows bottom-up (GL convention) so Y is flipped.
+ */
+function mapToGlowBuf(inst: MetalFxInstance, cssPxX: number, cssPxY: number): { bx: number; by: number } {
+  if (!SHARED) return { bx: 0, by: 0 };
+  const { glCanvas } = SHARED;
+  const cw = glCanvas.width, ch = glCanvas.height;
+  const dpr = inst.dpr;
+  const dw = inst.cssWidth * dpr, dh = inst.cssHeight * dpr;
+  const bdW = CANONICAL_PILL_W * dpr, bdH = CANONICAL_PILL_H * dpr;
+  let srcW = (dw * (cw / bdW)) / inst.shaderScale;
+  let srcH = (dh * (ch / bdH)) / inst.shaderScale;
+  if (srcW > cw) srcW = cw;
+  if (srcH > ch) srcH = ch;
+  const sx = (cw - srcW) / 2;
+  const sy = (ch - srcH) / 2;
+  const glX = sx + (cssPxX / inst.cssWidth) * srcW;
+  const glY = sy + (cssPxY / inst.cssHeight) * srcH;
+  const bx = Math.round(glX);
+  const by = Math.round(ch - 1 - glY);
+  return { bx, by };
+}
+
+function sampleRegion(
+  buf: Uint8Array, W: number, H: number,
+  bx: number, by: number, radius: number
+): { r: number; g: number; b: number; lum: number; count: number } {
+  const r = Math.max(1, radius | 0);
+  const x0 = Math.max(0, bx - r), x1 = Math.min(W, bx + r + 1);
+  const y0 = Math.max(0, by - r), y1 = Math.min(H, by + r + 1);
+  let sR = 0, sG = 0, sB = 0, sLum = 0, count = 0;
+  for (let py = y0; py < y1; py++) {
+    const row = py * W;
+    for (let px = x0; px < x1; px++) {
+      const i = (row + px) * 4;
+      sR += buf[i]; sG += buf[i + 1]; sB += buf[i + 2];
+      sLum += (0.2126 * buf[i] + 0.7152 * buf[i + 1] + 0.0722 * buf[i + 2]) / 255;
+      count++;
+    }
+  }
+  return { r: sR, g: sG, b: sB, lum: sLum, count };
+}
+
+export function sampleShaderLumAt(inst: MetalFxInstance, cssPxX: number, cssPxY: number, radius: number): number {
+  if (!SHARED) return 0;
+  ensureGlowPixels();
+  const { bx, by } = mapToGlowBuf(inst, cssPxX, cssPxY);
+  const s = sampleRegion(SHARED.glowPixels, SHARED.glowPixelsW, SHARED.glowPixelsH, bx, by, radius);
+  return s.count > 0 ? s.lum / s.count : 0;
+}
+
+export function sampleShaderRGBAt(inst: MetalFxInstance, cssPxX: number, cssPxY: number, radius: number): ShaderRGB {
+  if (!SHARED) return { r: 255, g: 255, b: 255 };
+  ensureGlowPixels();
+  const { bx, by } = mapToGlowBuf(inst, cssPxX, cssPxY);
+  const s = sampleRegion(SHARED.glowPixels, SHARED.glowPixelsW, SHARED.glowPixelsH, bx, by, radius);
+  if (s.count === 0) return { r: 255, g: 255, b: 255 };
+  return { r: s.r / s.count, g: s.g / s.count, b: s.b / s.count };
+}
+
+export function sampleShaderRGBChromatic(inst: MetalFxInstance, cssPxX: number, cssPxY: number, radius: number): ShaderRGB {
+  if (!SHARED) return { r: 255, g: 255, b: 255 };
+  ensureGlowPixels();
+  const { bx, by } = mapToGlowBuf(inst, cssPxX, cssPxY);
+  const { glowPixels: buf, glowPixelsW: W, glowPixelsH: H } = SHARED;
+  const r = Math.max(1, radius | 0);
+  const x0 = Math.max(0, bx - r), x1 = Math.min(W, bx + r + 1);
+  const y0 = Math.max(0, by - r), y1 = Math.min(H, by + r + 1);
+  let bestR = 255, bestG = 255, bestB = 255, bestScore = -1;
+  for (let py = y0; py < y1; py++) {
+    const row = py * W;
+    for (let px = x0; px < x1; px++) {
+      const i = (row + px) * 4;
+      const rr = buf[i], gg = buf[i + 1], bb = buf[i + 2];
+      const maxC = Math.max(rr, gg, bb), minC = Math.min(rr, gg, bb);
+      const sat = maxC > 0 ? (maxC - minC) / maxC : 0;
+      const score = sat * (0.35 + 0.65 * (maxC / 255));
+      if (score > bestScore) { bestScore = score; bestR = rr; bestG = gg; bestB = bb; }
+    }
+  }
+  return { r: bestR, g: bestG, b: bestB };
+}
