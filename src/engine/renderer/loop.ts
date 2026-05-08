@@ -1,5 +1,6 @@
 /** Animation loop, per-frame compositing, and instance lifecycle. */
-import { hexToRgb, PRESETS, type PresetName, type PresetTheme } from '../presets';
+import { hexToRgb } from '../color';
+import { PRESETS, type PresetName, type PresetTheme } from '../presets';
 import {
   SHARED,
   CANONICAL_PILL_W,

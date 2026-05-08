@@ -23,7 +23,7 @@ import {
 } from './engine/renderer/loop';
 import { injectGlow, updateGlow } from './engine/glow/glow';
 import { addReflectionTarget, removeReflectionTarget } from './engine/reflection/paint';
-import { scheduleReflectionPaint } from './engine/animationLoop';
+import { scheduleReflectionPaint } from './engine/reflection/reflectionScheduler';
 import { ensureStylesInjected } from './styles';
 import type { MetalFxProps, MetalFxTheme } from './types';
 
@@ -144,7 +144,6 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
       cssHeight: initial.cssHeight,
       cornerRadius: initial.cornerRadius,
       kind: shape,
-      onAfterFrame: scheduleReflectionPaint,
     });
     root.style.setProperty('--mfx-radius', `${initial.cornerRadius}px`);
     root.style.borderRadius = `${initial.cornerRadius}px`;
@@ -223,9 +222,13 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
     const inst = instanceRef.current;
     const root = rootRef.current;
     if (!inst || !root || !reflectionTargets || resolvedTheme !== 'dark') return;
+    inst.onAfterFrame = scheduleReflectionPaint;
     const live = reflectionTargets.flatMap((r) => (r.current ? [r.current] : []));
     for (const el of live) addReflectionTarget(el, inst, root);
-    return () => { for (const el of live) removeReflectionTarget(el); };
+    return () => {
+      inst.onAfterFrame = undefined;
+      for (const el of live) removeReflectionTarget(el);
+    };
   }, [reflectionTargets, resolvedTheme]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: trigger deps for radius re-sync

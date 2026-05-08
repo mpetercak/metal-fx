@@ -13,6 +13,7 @@
 import type { MetalFxInstance, ShaderRGB } from '../renderer/core';
 import { sampleShaderLumAt, sampleShaderRGBAt, sampleShaderRGBChromatic } from '../renderer/sampling';
 import { type Tween, ease, tween, tweenStart, tweenTick } from '../tween';
+import { hsvToRgb, rgbToHsv } from '../color';
 import {
   type GlowOptions,
   type PerimSample,
@@ -20,8 +21,6 @@ import {
   buildBlobPath,
   buildPerimTable,
   buildSvgMarkup,
-  hsvToRgb,
-  rgbToHsv,
   rrPerim,
   sampleAtArc,
   shapePerim,
