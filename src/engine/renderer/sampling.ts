@@ -7,9 +7,8 @@
  * flush on every frame. The plasma shader evolves slowly so 200ms-stale
  * data is visually indistinguishable.
  */
+import { GLOW_READBACK_INTERVAL_MS } from '../perfConfig';
 import { SHARED, CANONICAL_PILL_W, CANONICAL_PILL_H, type MetalFxInstance, type ShaderRGB } from './core';
-
-const GLOW_READBACK_INTERVAL_MS = 500;
 let _lastReadbackMs = 0;
 
 export function ensureGlowPixels(): void {

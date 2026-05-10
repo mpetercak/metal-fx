@@ -145,7 +145,7 @@ export function Playground({ theme, disableGlow }: { theme: Theme; disableGlow: 
           </>
         ) : (
           <div className="shadcn-grid">
-            <MetalFx preset={preset} theme={theme} strength={strength / 100} paused={paused} disableGlow={disableGlow}>
+            <MetalFx preset={preset} theme={theme} strength={strength / 100} paused={paused} disableGlow={disableGlow} >
               <Button variant="default">Default</Button>
             </MetalFx>
             <MetalFx preset={preset} theme={theme} strength={strength / 100} paused={paused} disableGlow={disableGlow}>

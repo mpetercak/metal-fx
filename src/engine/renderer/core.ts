@@ -10,10 +10,9 @@
  *   4. The animation loop is capped at ~30fps — the blur + slow plasma motion
  *      makes higher rates imperceptible.
  */
+import { CANONICAL_GL_SIZE, GL_DPR_CAP } from '../perfConfig';
 import { PRESETS, type PresetMode, type PresetName, type PresetTheme } from '../presets';
 import { compileShader, FRAG_SHADER_SRC, linkProgram, VERT_SHADER_SRC } from '../shaders';
-
-const CANONICAL_GL_SIZE = 96;
 export const CANONICAL_PILL_W = 140;
 export const CANONICAL_PILL_H = 40;
 export const PILL_SHADER_SCALE = 1.6;
@@ -109,7 +108,7 @@ function buildGLPipeline(gl: WebGLRenderingContext): {
 export function ensureSharedRenderer(): SharedRenderer {
   if (SHARED) return SHARED;
 
-  const dpr = Math.min(2, typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
+  const dpr = Math.min(GL_DPR_CAP, typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
   const size = Math.round(CANONICAL_GL_SIZE * dpr);
   const useOffscreen = typeof OffscreenCanvas !== 'undefined';
 

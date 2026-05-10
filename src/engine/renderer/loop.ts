@@ -1,5 +1,6 @@
 /** Animation loop, per-frame compositing, and instance lifecycle. */
 import { hexToRgb } from '../color';
+import { FRAME_INTERVAL_MS, GLOW_SKIP_FRAMES } from '../perfConfig';
 import { PRESETS, type PresetName, type PresetTheme } from '../presets';
 import {
   SHARED,
@@ -235,7 +236,6 @@ function renderSharedFrame(now: number): void {
   SHARED.frameCount++;
 }
 
-const FRAME_INTERVAL_MS = 42;
 let lastFrameMs = 0;
 
 function tick(now: number): void {
@@ -260,7 +260,7 @@ function tick(now: number): void {
 
   for (const inst of SHARED.instances) { if (inst.visible) copyShaderToInstance(inst); }
 
-  if (_glowCallback && SHARED.glowQueue.length > 0 && ++SHARED.glowSkip % 3 === 0) {
+  if (_glowCallback && SHARED.glowQueue.length > 0 && ++SHARED.glowSkip % GLOW_SKIP_FRAMES === 0) {
     const queue = SHARED.glowQueue;
     if (SHARED.glowIdx >= queue.length) SHARED.glowIdx = 0;
     const inst = queue[SHARED.glowIdx];

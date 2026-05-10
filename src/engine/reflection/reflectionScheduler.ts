@@ -5,12 +5,11 @@
  * temporal stepping completely. The scheduler coalesces rapid calls and
  * skips frames that arrive faster than the target interval.
  */
+import { REFLECTION_INTERVAL_MS } from '../perfConfig';
 import { paintReflections } from './paint';
 
 let scheduled = false;
 let lastReflectionMs = 0;
-
-const REFLECTION_INTERVAL_MS = 66; // ~15 fps
 
 export function scheduleReflectionPaint(): void {
   if (scheduled) return;

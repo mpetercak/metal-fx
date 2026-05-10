@@ -10,6 +10,7 @@
  *      at the current hotspot with slight "wander" motion for organic feel.
  *   4. The stroke color is tinted to match the shader's color at that point.
  */
+import { HALO_SEGMENTS, EXTRA_SEGMENTS } from '../perfConfig';
 import type { MetalFxInstance, ShaderRGB } from '../renderer/core';
 import { sampleShaderLumAt, sampleShaderRGBAt, sampleShaderRGBChromatic } from '../renderer/sampling';
 import { type Tween, ease, tween, tweenStart, tweenTick } from '../tween';
@@ -34,11 +35,11 @@ const LO = 0.08, HI = 0.32;
 const RELOCATE_DELTA = 0.05;
 const MIN_DWELL_MS = 3000;
 const PEAK_OP = 0.85, BASE_OP = 0.34;
-const RELOC_FADE_MS = 500;
+const RELOC_FADE_MS = 1500;
 const WANDER_RANGE = 15, WANDER_LERP = 0.0075, WANDER_RETARGET = 120;
 const INSET = 1.5;
-const HALO_HALFLEN = 7.8, HALO_SEGMENTS = 16, HALO_WOBBLE = 0.4;
-const EXTRA_HALFLEN = 9.13952, EXTRA_SEGMENTS = 8, EXTRA_OUTWARD = 1.0;
+const HALO_HALFLEN = 7.8, HALO_WOBBLE = 0.4;
+const EXTRA_HALFLEN = 9.13952, EXTRA_OUTWARD = 1.0;
 const EXTRA_SCALE = 1 / 3;
 const HALO_OP_MUL = 0.8;
 const EXTRA_INTENSITY = 3.51;
@@ -145,12 +146,10 @@ export function updateGlow(h: GlowHandles, inst: MetalFxInstance, nowMs: number,
     }
   }
 
-  if (h.relocTween && !h.relocTween.done) {
+  if (h.relocTween) {
     h.glowOpacity = tweenTick(h.relocTween, nowMs);
   }
   h.glowOpacity = Math.max(0, Math.min(1, h.glowOpacity));
-
-  if (h.glowOpacity < 0.001 && (!h.relocTween || h.relocTween.done)) return;
 
   const ratio = shapePerim(W, H, R, h.kind) / rrPerim(REF_W, REF_H, REF_R);
   const wanderRange = WANDER_RANGE * ratio;

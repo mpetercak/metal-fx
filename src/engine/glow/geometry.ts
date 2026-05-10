@@ -5,6 +5,7 @@
  * generation, SVG filter/mask construction, and HSV colour helpers.
  * No state — every function is a pure transform.
  */
+import { PERIM_SAMPLES } from '../perfConfig';
 
 const INSET = 1.5;
 const EXTRA_SCALE = 1 / 3;
@@ -14,7 +15,7 @@ const EXTRA_BLUR_OUTER = 2.0 * EXTRA_SCALE;
 const EXTRA_BLUR_CORE = 1.35 * EXTRA_SCALE;
 const EXTRA_FADE_R = 13.0 * EXTRA_SCALE;
 
-export const PERIM_SAMPLES = 16;
+export { PERIM_SAMPLES };
 
 export interface GlowOptions { width: number; height: number; cornerRadius: number; kind: 'pill' | 'circle' }
 export interface Pt { x: number; y: number }
