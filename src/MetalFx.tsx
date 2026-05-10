@@ -27,26 +27,39 @@ import { scheduleReflectionPaint } from './engine/reflection/reflectionScheduler
 import { ensureStylesInjected } from './styles';
 import type { MetalFxProps, MetalFxTheme } from './types';
 
+// Runs at module scope so styles exist before the first component render,
+// even in SSR-hydration scenarios where effects haven't fired yet.
 ensureStylesInjected();
 
+// Hoisted to avoid allocating new objects on every render.
 const CANVAS_STYLE: CSSProperties = { position: 'absolute', inset: 0, width: '100%', height: '100%' };
 const INNER_STYLE: CSSProperties = { position: 'absolute', inset: 3 };
 const GLOW_HOST_STYLE: CSSProperties = { position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 3, borderRadius: 'inherit' };
 
-/**
- * Global registry mapping each live MetalFxInstance to its glow handles.
- * The shared renderer's tick() loop invokes one glow update per frame via
- * setGlowCallback; this map lets it find the right SVG handles for the
- * instance being updated.
- */
+// Maps each live instance to its SVG glow handles and a theme ref.
+// Keyed by instance (not component) because the same component can be
+// remounted with a new instance after shape/glowEnabled changes.
 const glowHandlesMap = new Map<MetalFxInstance, { handles: ReturnType<typeof injectGlow>; themeRef: { current: 'dark' | 'light' } }>();
 
+// Bridge between the shared animation loop and per-instance glow SVGs.
+// The loop module doesn't import glow directly — it invokes this callback
+// for one queued instance per frame (round-robin), keeping render work
+// proportional to frame budget regardless of instance count.
 setGlowCallback((inst, nowMs) => {
   const entry = glowHandlesMap.get(inst);
   if (!entry) return;
   updateGlow(entry.handles, inst, nowMs, inst.opacityMul, entry.themeRef.current);
 });
 
+/**
+ * Resolves 'auto' theme to 'dark' | 'light' and keeps it in sync with
+ * the OS preference via matchMedia.
+ *
+ * The useState initialiser runs synchronously so the resolved value is
+ * available on the first render (no flash). The useEffect then attaches
+ * the MQL listener and calls update() immediately to handle the case
+ * where the OS preference changed between SSR and hydration.
+ */
 function useResolvedTheme(theme: MetalFxTheme): 'dark' | 'light' {
   const [resolved, setResolved] = useState<'dark' | 'light'>(() => {
     if (theme !== 'auto') return theme;
@@ -67,6 +80,13 @@ function useResolvedTheme(theme: MetalFxTheme): 'dark' | 'light' {
   return resolved;
 }
 
+/**
+ * Wraps any element with an animated metallic ring effect driven by a
+ * single shared WebGL renderer. All visible MetalFx instances on the page
+ * share one offscreen GL canvas; each instance composites a cropped/scaled
+ * copy of it onto its own 2D canvas with a rounded hole punched through the
+ * centre.
+ */
 export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx(
   {
     children,
@@ -85,6 +105,12 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
   },
   forwardedRef
 ) {
+  // DOM refs — rootRef/canvasRef/glowHostRef/contentRef are for direct DOM access.
+  // instanceRef/glowHandlesRef hold engine objects that survive React re-renders.
+  // themeRef lets the glow callback read the current theme without a closure
+  // over a stale value — mutated during render, never triggers a re-render.
+  // initialWrapperRadiusRef caches the CSS border-radius read at mount time so
+  // measure() can fall back to it when no explicit borderRadius prop is given.
   const rootRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const glowHostRef = useRef<HTMLDivElement | null>(null);
@@ -95,6 +121,8 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
   const initialWrapperRadiusRef = useRef<number>(0);
 
   const resolvedTheme = useResolvedTheme(theme);
+  // Write during render (not in an effect) so the glow callback always sees
+  // the up-to-date theme on the very next tick.
   themeRef.current = resolvedTheme;
   const shape: 'pill' | 'circle' = variant === 'circle' ? 'circle' : 'pill';
   const glowEnabled = !disableGlow;
@@ -104,8 +132,9 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
   useEffect(() => { setSharedPreset(preset, resolvedTheme); }, [preset, resolvedTheme]);
   useEffect(() => { if (paused) pauseShared(); else resumeShared(); }, [paused]);
 
-  // Main lifecycle: create the renderer instance, set up ResizeObserver +
-  // IntersectionObserver, inject glow SVG, and register for staggered updates.
+  // useLayoutEffect (not useEffect) so the instance is created and the canvas
+  // is sized synchronously before the browser paints — avoids a one-frame
+  // flash of the unsized canvas.
   // biome-ignore lint/correctness/useExhaustiveDependencies: borderRadius changes handled by separate effect
   useLayoutEffect(() => {
     const canvas = canvasRef.current;
@@ -120,6 +149,10 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
       initialWrapperRadiusRef.current = Number.isFinite(parsed) ? parsed : 0;
     }
 
+    // measure() is defined inside the effect so it closes over borderRadius and
+    // contentRef without listing them as deps — borderRadius changes are handled
+    // by the dedicated radius-sync effect below; re-running this full lifecycle
+    // on borderRadius changes would destroy and recreate the instance needlessly.
     const measure = () => {
       const rect = root.getBoundingClientRect();
       const cssWidth = Math.max(1, Math.round(rect.width));
@@ -162,6 +195,8 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
     let resizeRaf = 0;
     const ro = new ResizeObserver(() => {
       if (resizeRaf !== 0) return;
+      // RAF-debounce: coalesce multiple resize events within the same frame and
+      // skip any that fire while a frame is already queued.
       resizeRaf = requestAnimationFrame(() => {
         resizeRaf = 0;
         const next = measure();
@@ -171,6 +206,8 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
         root.style.setProperty('--mfx-radius', `${next.cornerRadius}px`);
         root.style.borderRadius = `${next.cornerRadius}px`;
         if (glowEnabled && glowHost) {
+          // Glow SVG must be rebuilt on resize because the perimeter table and path
+          // geometry are computed from the fixed width/height at inject time.
           glowHost.innerHTML = '';
           glowHandlesRef.current = injectGlow(glowHost, {
             width: next.cssWidth, height: next.cssHeight, cornerRadius: next.cornerRadius, kind: shape,
@@ -183,6 +220,9 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
     });
     ro.observe(root);
 
+    // Skip GL compositing for off-screen instances — the loop checks inst.visible
+    // before copyShaderToInstance, so hidden instances cost nothing per frame.
+    // rootMargin: 64px starts rendering slightly before the element scrolls into view.
     let io: IntersectionObserver | null = null;
     if (typeof IntersectionObserver !== 'undefined') {
       io = new IntersectionObserver(
@@ -213,6 +253,8 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
     };
   }, [shape, glowEnabled]);
 
+  // Cap button-variant opacity at 0.92 — full opacity makes the ring look
+  // oversaturated on the pill shape at default strength.
   useEffect(() => {
     const inst = instanceRef.current;
     if (!inst) return;
@@ -220,6 +262,9 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
     updateInstance(inst, { opacityMul: Math.max(0, Math.min(1, strength * cap)) });
   }, [strength, variant]);
 
+  // onAfterFrame is wired here rather than at createInstance time so instances
+  // without reflectionTargets never schedule the reflection RAF.
+  // Reflections are dark-mode only — no DOM work in light mode.
   useEffect(() => {
     const inst = instanceRef.current;
     const root = rootRef.current;
@@ -233,6 +278,10 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
     };
   }, [reflectionTargets, resolvedTheme]);
 
+  // Separate from the main lifecycle effect so borderRadius / variant / theme
+  // changes re-sync the radius without destroying and recreating the instance.
+  // biome-ignore covers shape, which is derived from variant and identical to
+  // inst.kind — adding it would be correct but redundant.
   // biome-ignore lint/correctness/useExhaustiveDependencies: trigger deps for radius re-sync
   useEffect(() => {
     const root = rootRef.current;
@@ -255,6 +304,8 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
     root.style.borderRadius = `${cornerRadius}px`;
   }, [borderRadius, resolvedTheme, variant, shape]);
 
+  // --mfx-strength is consumed by downstream CSS (e.g. content opacity rules).
+  // Spread style last so consumer inline styles can still override other props.
   const wrapperStyle = useMemo<CSSProperties>(
     () => ({ ...style, ['--mfx-strength' as string]: String(Math.min(1, Math.max(0, strength))) }),
     [style, strength]
