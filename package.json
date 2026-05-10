@@ -24,11 +24,11 @@
   "sideEffects": false,
   "scripts": {
     "dev": "vite",
-    "dev:demo2": "vite --config vite.config.demo2.ts",
+    "dev:demo": "vite --config vite.config.demo.ts",
     "build": "vite build",
     "build:playground": "vite build --config vite.config.playground.ts",
-    "build:demo2": "vite build --config vite.config.demo2.ts",
-    "deploy": "npm run build:demo2 && wrangler pages deploy dist-demo2 --project-name metal-fx-playground",
+    "build:demo": "vite build --config vite.config.demo.ts",
+    "deploy": "npm run build:demo && wrangler pages deploy dist-demo --project-name metal-fx-playground",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build"
   },
