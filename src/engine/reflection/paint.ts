@@ -13,7 +13,7 @@ import {
   GRAD_FAR,
   GRAD_MID,
   GRAD_NEAR,
-  HORIZONTAL_OVERLAP_MIN_PX,
+  OVERLAP_MIN_PX,
   INTENSITY_MULT,
   MAX_ALPHA_STACK,
   RANGE_PX,
@@ -28,6 +28,7 @@ import {
   type DrawDst,
   drawBorderHighlight,
   isHorizontalNeighbour,
+  isVerticalNeighbour,
   maskedFillPasses,
   maskedStrokePasses,
   shortestRectDistance,
@@ -139,7 +140,10 @@ export function paintReflections(): void {
     if (tRect.width < 1 || tRect.height < 1) continue;
     if (aRect.width < 1 || aRect.height < 1) continue;
 
-    if (!isHorizontalNeighbour(aRect, tRect, HORIZONTAL_OVERLAP_MIN_PX, ATTACH_RANGE_PX)) {
+    if (
+      !isHorizontalNeighbour(aRect, tRect, OVERLAP_MIN_PX, ATTACH_RANGE_PX) &&
+      !isVerticalNeighbour(aRect, tRect, OVERLAP_MIN_PX, ATTACH_RANGE_PX)
+    ) {
       if (t.canvas.width !== 1) { t.canvas.width = 1; t.canvas.height = 1; }
       if (t.strokeCanvas.width !== 1) { t.strokeCanvas.width = 1; t.strokeCanvas.height = 1; }
       continue;
@@ -156,6 +160,10 @@ export function paintReflections(): void {
     const tcy = (tRect.top + tRect.bottom) * 0.5;
     const dx = acx - tcx;
     const dy = acy - tcy;
+
+    const edgeGapH = Math.max(aRect.left - tRect.right, tRect.left - aRect.right, 0);
+    const edgeGapV = Math.max(aRect.top - tRect.bottom, tRect.top - aRect.bottom, 0);
+    const isHorizontalLayout = edgeGapH >= edgeGapV;
 
     const dist = shortestRectDistance(aRect, tRect);
     let proximity = 1 - Math.min(1, dist / RANGE_PX);
@@ -194,7 +202,7 @@ export function paintReflections(): void {
 
     const bandDevPx = Math.min(RANGE_PX * dpr, Math.max(tw, th));
     let g0x: number, g0y: number, g1x: number, g1y: number;
-    if (Math.abs(dx) >= Math.abs(dy)) {
+    if (isHorizontalLayout) {
       g0x = dx > 0 ? tw : 0; g1x = dx > 0 ? tw - bandDevPx : bandDevPx;
       g0y = th * 0.5; g1y = th * 0.5;
     } else {
@@ -209,16 +217,24 @@ export function paintReflections(): void {
     const anchorCssW = sw / dpr;
     const refWdpr = Math.max(1, Math.round(REF_DRAW_CSS_W * Math.max(0.1, anchorCssW / 140) * dpr));
 
-    let drawX: number, drawY = 0, drawW = refWdpr, drawH = th;
+    let drawX: number, drawY: number, drawW: number, drawH: number;
     let flipX = false, flipY = false;
-    if (Math.abs(dx) >= Math.abs(dy)) {
+    if (isHorizontalLayout) {
+      const overlapTop = Math.max(aRect.top, tRect.top);
+      const overlapBot = Math.min(aRect.bottom, tRect.bottom);
       flipX = true;
       drawX = dx > 0 ? tw - refWdpr : 0;
+      drawY = Math.round((overlapTop - tRect.top + overscanCssPx) * dpr);
+      drawW = refWdpr;
+      drawH = Math.max(1, Math.round((overlapBot - overlapTop) * dpr));
     } else {
+      const overlapLeft = Math.max(aRect.left, tRect.left);
+      const overlapRight = Math.min(aRect.right, tRect.right);
       flipY = true;
-      drawW = th; drawH = refWdpr;
-      drawY = dy > 0 ? th - drawH : 0;
-      drawX = Math.round((tw - drawW) * 0.5);
+      drawX = Math.round((overlapLeft - tRect.left + overscanCssPx) * dpr);
+      drawY = dy > 0 ? th - refWdpr : 0;
+      drawW = Math.max(1, Math.round((overlapRight - overlapLeft) * dpr));
+      drawH = refWdpr;
     }
     const drawDst: DrawDst = { x: drawX, y: drawY, w: drawW, h: drawH, flipX, flipY };
 

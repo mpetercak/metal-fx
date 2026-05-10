@@ -8,7 +8,7 @@ import type { MetalFxInstance } from '../renderer/core';
 
 export const RANGE_PX = 12;
 export const ATTACH_RANGE_PX = 32;
-export const HORIZONTAL_OVERLAP_MIN_PX = 1;
+export const OVERLAP_MIN_PX = 1;
 export const BASE_ALPHA = 0.55;
 export const BOOST_ALPHA = 1.0;
 export const GRAD_NEAR = 1.0;

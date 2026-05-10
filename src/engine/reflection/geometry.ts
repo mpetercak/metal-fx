@@ -29,6 +29,19 @@ export function isHorizontalNeighbour(anchorRect: DOMRect, targetRect: DOMRect, 
   return true;
 }
 
+export function isVerticalNeighbour(anchorRect: DOMRect, targetRect: DOMRect, overlapMin: number, attachRange: number): boolean {
+  const horizontalOverlap =
+    Math.min(anchorRect.right, targetRect.right) -
+    Math.max(anchorRect.left, targetRect.left);
+  if (horizontalOverlap < overlapMin) return false;
+  const verticalGap = Math.max(
+    anchorRect.top - targetRect.bottom,
+    targetRect.top - anchorRect.bottom,
+    0
+  );
+  return verticalGap <= attachRange;
+}
+
 // ─── Path helpers ─────────────────────────────────────────────────────────
 
 export function roundRectPath(
