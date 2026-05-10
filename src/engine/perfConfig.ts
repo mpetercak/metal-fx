@@ -1,19 +1,19 @@
 // ─── Frame rates ──────────────────────────────────────────────────────────
 
 // Main render loop: shader + canvas compositing. 66ms ≈ 15fps.
-export const FRAME_INTERVAL_MS = 66;
+export const FRAME_INTERVAL_MS = 84;
 
 // Reflection repaint throttle. Matches main loop; CSS blur hides stepping.
-export const REFLECTION_INTERVAL_MS = 66;
+export const REFLECTION_INTERVAL_MS = 84;
 
 // ─── Glow ─────────────────────────────────────────────────────────────────
 
 // gl.readPixels interval for luminance sampling. GPU→CPU sync is expensive.
-export const GLOW_READBACK_INTERVAL_MS = 500;
+export const GLOW_READBACK_INTERVAL_MS = 1500;
 
 // Only run the glow callback every Nth rendered frame. Each update triggers
 // Chrome to re-rasterize + re-blur 6 SVG paths through 2 masks.
-export const GLOW_SKIP_FRAMES = 3;
+export const GLOW_SKIP_FRAMES = 1;
 
 // Points sampled around the perimeter to find the brightest hotspot.
 export const PERIM_SAMPLES = 16;
