@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { CopyButton } from './components/CopyButton';
 import { Examples } from './components/Examples';
 import { Footer } from './components/Footer';
@@ -8,31 +8,30 @@ import { useTheme } from './hooks/useTheme';
 
 export function App() {
   const [theme, toggleTheme] = useTheme();
-  const [disableGlow, setDisableGlow] = useState(false);
 
   return (
-    <main className="app">
-      <Header theme={theme} onToggleTheme={toggleTheme} disableGlow={disableGlow} onToggleGlow={() => setDisableGlow((g) => !g)} />
+    <main className="flex flex-col items-center max-w-[883px] mx-auto w-full px-6 pb-16 max-sm:px-4 max-sm:pb-12">
+      <Header theme={theme} onToggleTheme={toggleTheme} />
 
-      <Examples theme={theme} disableGlow={disableGlow} />
+      <Examples theme={theme} />
 
-      <section className="section" aria-label="Installation">
-        <h2 className="section-title">Installation</h2>
-        <div className="code-block">
-          <code>npm install metal-fx</code>
+      <section className="w-full mb-6" aria-label="Installation">
+        <h2 className="text-base font-normal leading-[34px] text-(--section-title-color) mb-1">Installation</h2>
+        <div className="flex items-center h-10 bg-(--code-bg) rounded-[10px] py-0.5 pr-10 pl-3 overflow-hidden relative">
+          <code className="font-[Roboto_Mono,monospace] text-sm leading-[22px] text-(--code-text) whitespace-pre overflow-x-auto min-w-0 flex-1">npm install metal-fx</code>
           <CopyButton getText={() => 'npm install metal-fx'} />
         </div>
       </section>
 
-      <section className="section" aria-label="Usage">
-        <h2 className="section-title section-title--muted">Usage</h2>
-        <div className="code-block code-block--multi">
-          <code>{`import { MetalFx } from 'metal-fx';\n\n<MetalFx preset="chromatic" strength={1}>\n  <button>Upgrade to Pro</button>\n</MetalFx>`}</code>
+      <section className="w-full mb-6" aria-label="Usage">
+        <h2 className="text-base font-normal leading-[34px] text-(--section-title-muted) mb-1">Usage</h2>
+        <div className="flex items-start h-auto bg-(--code-bg) rounded-[10px] py-1.5 pr-10 pl-3 overflow-hidden relative">
+          <code className="font-[Roboto_Mono,monospace] text-sm leading-[22px] text-(--code-text) whitespace-pre overflow-x-auto min-w-0 flex-1">{`import { MetalFx } from 'metal-fx';\n\n<MetalFx preset="chromatic" strength={1}>\n  <button>Upgrade to Pro</button>\n</MetalFx>`}</code>
           <CopyButton getText={() => `import { MetalFx } from 'metal-fx';\n\n<MetalFx preset="chromatic" strength={1}>\n  <button>Upgrade to Pro</button>\n</MetalFx>`} />
         </div>
       </section>
 
-      <Playground theme={theme} disableGlow={disableGlow} />
+      <Playground theme={theme} />
 
       <Footer />
     </main>

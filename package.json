@@ -28,7 +28,7 @@
     "build": "vite build",
     "build:playground": "vite build --config vite.config.playground.ts",
     "build:demo2": "vite build --config vite.config.demo2.ts",
-    "deploy": "npm run build:playground && wrangler pages deploy dist-playground --project-name metal-fx-playground",
+    "deploy": "npm run build:demo2 && wrangler pages deploy dist-demo2 --project-name metal-fx-playground",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build"
   },
