@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'path';
 
 export default defineConfig({
+  base: '/metal-fx/',
   plugins: [react(), tailwindcss()],
   root: resolve(__dirname, 'demo'),
   build: {
