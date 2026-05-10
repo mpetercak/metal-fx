@@ -9,10 +9,10 @@
  */
 import { SHARED, CANONICAL_PILL_W, CANONICAL_PILL_H, type MetalFxInstance, type ShaderRGB } from './core';
 
-const GLOW_READBACK_INTERVAL_MS = 300;
+const GLOW_READBACK_INTERVAL_MS = 500;
 let _lastReadbackMs = 0;
 
-function ensureGlowPixels(): void {
+export function ensureGlowPixels(): void {
   if (!SHARED) return;
   const now = performance.now();
   if (now - _lastReadbackMs < GLOW_READBACK_INTERVAL_MS) return;

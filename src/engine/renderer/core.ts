@@ -13,7 +13,7 @@
 import { PRESETS, type PresetMode, type PresetName, type PresetTheme } from '../presets';
 import { compileShader, FRAG_SHADER_SRC, linkProgram, VERT_SHADER_SRC } from '../shaders';
 
-const CANONICAL_GL_SIZE = 150;
+const CANONICAL_GL_SIZE = 96;
 export const CANONICAL_PILL_W = 140;
 export const CANONICAL_PILL_H = 40;
 export const PILL_SHADER_SCALE = 1.6;
@@ -37,7 +37,7 @@ export interface MetalFxInstance {
 }
 
 export interface SharedRenderer {
-  glCanvas: HTMLCanvasElement;
+  glCanvas: HTMLCanvasElement | OffscreenCanvas;
   gl: WebGLRenderingContext;
   program: WebGLProgram;
   buffer: WebGLBuffer;
@@ -45,6 +45,8 @@ export interface SharedRenderer {
   preset: PresetMode;
   presetDirty: boolean;
   contextLost: boolean;
+  useOffscreen: boolean;
+  frameBitmap: ImageBitmap | null;
   startMs: number;
   pausedMs: number;
   pausedAtMs: number | null;
@@ -106,24 +108,33 @@ function buildGLPipeline(gl: WebGLRenderingContext): {
 export function ensureSharedRenderer(): SharedRenderer {
   if (SHARED) return SHARED;
 
-  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-  const glCanvas = document.createElement('canvas');
-  glCanvas.width = CANONICAL_GL_SIZE * dpr;
-  glCanvas.height = CANONICAL_GL_SIZE * dpr;
+  const dpr = Math.min(2, typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
+  const size = Math.round(CANONICAL_GL_SIZE * dpr);
+  const useOffscreen = typeof OffscreenCanvas !== 'undefined';
 
-  const gl = (glCanvas.getContext('webgl', {
-    alpha: true, premultipliedAlpha: false, antialias: false, preserveDrawingBuffer: true,
-  }) ?? glCanvas.getContext('experimental-webgl')) as WebGLRenderingContext | null;
+  let glCanvas: HTMLCanvasElement | OffscreenCanvas;
+  let gl: WebGLRenderingContext | null;
+
+  if (useOffscreen) {
+    glCanvas = new OffscreenCanvas(size, size);
+    gl = glCanvas.getContext('webgl', {
+      alpha: true, premultipliedAlpha: false, antialias: false,
+    }) as WebGLRenderingContext | null;
+  } else {
+    const htmlCanvas = document.createElement('canvas');
+    htmlCanvas.width = size;
+    htmlCanvas.height = size;
+    gl = (htmlCanvas.getContext('webgl', {
+      alpha: true, premultipliedAlpha: false, antialias: false, preserveDrawingBuffer: true,
+    }) ?? htmlCanvas.getContext('experimental-webgl')) as WebGLRenderingContext | null;
+    glCanvas = htmlCanvas;
+  }
   if (!gl) throw new Error('metal-fx: WebGL not supported');
 
   const { program, buffer, uniforms } = buildGLPipeline(gl);
 
-  glCanvas.addEventListener('webglcontextlost', (e) => {
-    e.preventDefault();
-    if (SHARED) SHARED.contextLost = true;
-  }, false);
-
-  glCanvas.addEventListener('webglcontextrestored', () => {
+  const onContextLost = (e: Event) => { e.preventDefault(); if (SHARED) SHARED.contextLost = true; };
+  const onContextRestored = () => {
     if (!SHARED) return;
     const rebuilt = buildGLPipeline(SHARED.gl);
     SHARED.program = rebuilt.program;
@@ -132,25 +143,28 @@ export function ensureSharedRenderer(): SharedRenderer {
     SHARED.presetDirty = true;
     SHARED.contextLost = false;
     _onContextRestored?.();
-  }, false);
+  };
+  glCanvas.addEventListener('webglcontextlost', onContextLost as EventListener, false);
+  glCanvas.addEventListener('webglcontextrestored', onContextRestored as EventListener, false);
 
   SHARED = {
     glCanvas, gl, program, buffer, uniforms,
     preset: PRESETS.chromatic.modes.dark, presetDirty: true,
-    contextLost: false,
+    contextLost: false, useOffscreen, frameBitmap: null,
     startMs: performance.now(), pausedMs: 0, pausedAtMs: null,
     rafId: 0, dpr, instances: new Set(), frameCount: 0,
     glowQueue: [], glowIdx: 0,
-    glowPixels: new Uint8Array(glCanvas.width * glCanvas.height * 4),
-    glowPixelsW: glCanvas.width, glowPixelsH: glCanvas.height,
+    glowPixels: new Uint8Array(size * size * 4),
+    glowPixelsW: size, glowPixelsH: size,
   };
   return SHARED;
 }
 
 export function teardownSharedRenderer(): void {
   if (!SHARED) return;
-  const { gl, program, buffer } = SHARED;
+  const { gl, program, buffer, frameBitmap } = SHARED;
   try {
+    frameBitmap?.close();
     gl.deleteBuffer(buffer);
     gl.deleteProgram(program);
     gl.getExtension('WEBGL_lose_context')?.loseContext();

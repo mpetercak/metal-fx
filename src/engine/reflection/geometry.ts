@@ -145,7 +145,7 @@ export function maskedFillPasses(
   const fillBandDevPx = Math.max(1, Math.round((RANGE_PX + FILL_BLUR_CSS_PX * 3) * dpr));
   let remaining = Math.max(0, totalAlpha);
   let firstChunk = true;
-  for (let i = 0; i < 8 && remaining > 1e-4; i++) {
+  for (let i = 0; i < 3 && remaining > 1e-4; i++) {
     const a = Math.min(1, remaining);
     ctx.save();
     fillRingClip(ctx, fillBox.x, fillBox.y, fillBox.w, fillBox.h, fillBox.r, fillBandDevPx);
@@ -194,7 +194,7 @@ export function maskedStrokePasses(
 ): void {
   let remaining = intensity * strokeExtraAlpha;
   let firstChunk = true;
-  for (let i = 0; i < 8 && remaining > 1e-4; i++) {
+  for (let i = 0; i < 3 && remaining > 1e-4; i++) {
     const a = Math.min(1, remaining);
     ctx.save();
     insideStrokeEvenOddClip(ctx, strokeBox.x, strokeBox.y, strokeBox.w, strokeBox.h, strokeBox.r, strokeBandPx);

@@ -12,6 +12,7 @@ import {
   teardownSharedRenderer,
   type MetalFxInstance,
 } from './core';
+import { ensureGlowPixels } from './sampling';
 
 // Restart the animation loop when the browser restores the GL context.
 setContextRestoredCallback(() => {
@@ -19,6 +20,17 @@ setContextRestoredCallback(() => {
     startSharedLoop();
   }
 });
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (!SHARED || SHARED.pausedAtMs !== null || SHARED.contextLost) return;
+    if (document.hidden) {
+      stopSharedLoop();
+    } else if (SHARED.instances.size > 0) {
+      startSharedLoop();
+    }
+  });
+}
 
 // ─── Instance lifecycle ───────────────────────────────────────────────────
 
@@ -97,6 +109,9 @@ export function updateInstance(
 
 export function setInstanceVisible(inst: MetalFxInstance, visible: boolean): void {
   inst.visible = visible;
+  if (visible && SHARED && SHARED.rafId === 0 && SHARED.pausedAtMs === null && !SHARED.contextLost) {
+    startSharedLoop();
+  }
 }
 
 export function setSharedPreset(name: PresetName, theme: PresetTheme): void {
@@ -157,12 +172,12 @@ function punchInnerHole(inst: MetalFxInstance): void {
 
 function copyShaderToInstance(inst: MetalFxInstance): void {
   if (!SHARED) return;
-  const { glCanvas } = SHARED;
+  const src: CanvasImageSource = SHARED.frameBitmap ?? SHARED.glCanvas;
   const dpr = inst.dpr;
   const dw = inst.canvas.width, dh = inst.canvas.height;
   if (dw < 1 || dh < 1) return;
 
-  const cw = glCanvas.width, ch = glCanvas.height;
+  const cw = SHARED.glCanvas.width, ch = SHARED.glCanvas.height;
   const bdW = CANONICAL_PILL_W * dpr, bdH = CANONICAL_PILL_H * dpr;
   let srcW = (dw * (cw / bdW)) / inst.shaderScale;
   let srcH = (dh * (ch / bdH)) / inst.shaderScale;
@@ -173,7 +188,7 @@ function copyShaderToInstance(inst: MetalFxInstance): void {
 
   inst.ctx.clearRect(0, 0, dw, dh);
   if (inst.opacityMul < 1) inst.ctx.globalAlpha = inst.opacityMul;
-  inst.ctx.drawImage(glCanvas, sx, sy, srcW, srcH, 0, 0, dw, dh);
+  inst.ctx.drawImage(src, sx, sy, srcW, srcH, 0, 0, dw, dh);
   if (inst.opacityMul < 1) inst.ctx.globalAlpha = 1;
 
   punchInnerHole(inst);
@@ -226,23 +241,31 @@ let lastFrameMs = 0;
 function tick(now: number): void {
   if (!SHARED) return;
   if (SHARED.contextLost) { SHARED.rafId = 0; return; }
-  SHARED.rafId = requestAnimationFrame(tick);
-  if (document.hidden) return;
-  if (now - lastFrameMs < FRAME_INTERVAL_MS) return;
-  lastFrameMs = now;
+
   let anyVisible = false;
   for (const inst of SHARED.instances) { if (inst.visible) { anyVisible = true; break; } }
-  if (anyVisible) {
-    renderSharedFrame(now);
-    for (const inst of SHARED.instances) { if (inst.visible) copyShaderToInstance(inst); }
+  if (!anyVisible) { SHARED.rafId = 0; return; }
 
-    if (_glowCallback && SHARED.glowQueue.length > 0) {
-      const queue = SHARED.glowQueue;
-      if (SHARED.glowIdx >= queue.length) SHARED.glowIdx = 0;
-      const inst = queue[SHARED.glowIdx];
-      if (inst.visible) _glowCallback(inst, now);
-      SHARED.glowIdx++;
-    }
+  SHARED.rafId = requestAnimationFrame(tick);
+  if (now - lastFrameMs < FRAME_INTERVAL_MS) return;
+  lastFrameMs = now;
+
+  renderSharedFrame(now);
+
+  if (SHARED.useOffscreen) {
+    if (SHARED.glowQueue.length > 0) ensureGlowPixels();
+    SHARED.frameBitmap?.close();
+    SHARED.frameBitmap = (SHARED.glCanvas as OffscreenCanvas).transferToImageBitmap();
+  }
+
+  for (const inst of SHARED.instances) { if (inst.visible) copyShaderToInstance(inst); }
+
+  if (_glowCallback && SHARED.glowQueue.length > 0) {
+    const queue = SHARED.glowQueue;
+    if (SHARED.glowIdx >= queue.length) SHARED.glowIdx = 0;
+    const inst = queue[SHARED.glowIdx];
+    if (inst.visible) _glowCallback(inst, now);
+    SHARED.glowIdx++;
   }
 }
 
