@@ -18,12 +18,11 @@ function buildSnippet(variant: MetalFxVariant, preset: MetalFxPreset, strength: 
   return `<MetalFx ${props.join(' ')}>\n${child}\n</MetalFx>`;
 }
 
-export function Playground({ theme }: { theme: Theme }) {
+export function Playground({ theme, disableGlow }: { theme: Theme; disableGlow: boolean }) {
   const [variant, setVariant] = useState<MetalFxVariant>('button');
   const [preset, setPreset] = useState<MetalFxPreset>('chromatic');
   const [strength, setStrength] = useState(100);
   const [paused, setPaused] = useState(false);
-  const [disableGlow, setDisableGlow] = useState(false);
 
   const snippet = buildSnippet(variant, preset, strength / 100);
 
@@ -80,13 +79,6 @@ export function Playground({ theme }: { theme: Theme }) {
               aria-label="Effect strength"
             />
           </div>
-        </div>
-
-        <div className="control-group control-group--toggle">
-          <label>
-            <input type="checkbox" checked={disableGlow} onChange={(e) => setDisableGlow(e.target.checked)} />
-            No glow
-          </label>
         </div>
 
         <div className="control-group control-group--toggle">

@@ -2,7 +2,7 @@ import React from 'react';
 import type { Theme } from '../hooks/useTheme';
 import { GitHubIcon, XIcon } from './icons';
 
-export function Header({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
+export function Header({ theme, onToggleTheme, disableGlow, onToggleGlow }: { theme: Theme; onToggleTheme: () => void; disableGlow: boolean; onToggleGlow: () => void }) {
   return (
     <header className="header">
       <nav className="top-bar-links" aria-label="External links">
@@ -12,6 +12,19 @@ export function Header({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: 
         <a className="icon-btn" href="https://x.com/jakubantalik" target="_blank" rel="noopener noreferrer" aria-label="Follow on X (Twitter)">
           <XIcon />
         </a>
+        <button className="icon-btn" type="button" onClick={onToggleGlow} aria-label="Toggle glow" aria-pressed={!disableGlow} title={disableGlow ? 'Enable glow' : 'Disable glow'}>
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: disableGlow ? 0.4 : 1 }}>
+            <circle cx="12" cy="12" r="5" />
+            <line x1="12" y1="1" x2="12" y2="3" />
+            <line x1="12" y1="21" x2="12" y2="23" />
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+            <line x1="1" y1="12" x2="3" y2="12" />
+            <line x1="21" y1="12" x2="23" y2="12" />
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+          </svg>
+        </button>
         <button className="icon-btn" type="button" onClick={onToggleTheme} aria-label="Toggle theme">
           <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
             {theme === 'dark' ? (

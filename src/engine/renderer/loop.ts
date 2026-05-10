@@ -8,9 +8,17 @@ import {
   CIRCLE_SHADER_SCALE,
   PILL_SHADER_SCALE,
   ensureSharedRenderer,
+  setContextRestoredCallback,
   teardownSharedRenderer,
   type MetalFxInstance,
 } from './core';
+
+// Restart the animation loop when the browser restores the GL context.
+setContextRestoredCallback(() => {
+  if (SHARED && SHARED.instances.size > 0 && SHARED.pausedAtMs === null) {
+    startSharedLoop();
+  }
+});
 
 // ─── Instance lifecycle ───────────────────────────────────────────────────
 
@@ -217,6 +225,7 @@ let lastFrameMs = 0;
 
 function tick(now: number): void {
   if (!SHARED) return;
+  if (SHARED.contextLost) { SHARED.rafId = 0; return; }
   SHARED.rafId = requestAnimationFrame(tick);
   if (document.hidden) return;
   if (now - lastFrameMs < FRAME_INTERVAL_MS) return;

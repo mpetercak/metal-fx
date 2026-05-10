@@ -141,7 +141,6 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
     const root = rootRef.current;
     const glowHost = glowHostRef.current;
     if (!canvas || !root) return;
-    if (glowEnabled && !glowHost) return;
 
     {
       const computed = getComputedStyle(root);
@@ -149,10 +148,6 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
       initialWrapperRadiusRef.current = Number.isFinite(parsed) ? parsed : 0;
     }
 
-    // measure() is defined inside the effect so it closes over borderRadius and
-    // contentRef without listing them as deps — borderRadius changes are handled
-    // by the dedicated radius-sync effect below; re-running this full lifecycle
-    // on borderRadius changes would destroy and recreate the instance needlessly.
     const measure = () => {
       const rect = root.getBoundingClientRect();
       const cssWidth = Math.max(1, Math.round(rect.width));
@@ -183,7 +178,7 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
     root.style.setProperty('--mfx-radius', `${initial.cornerRadius}px`);
     root.style.borderRadius = `${initial.cornerRadius}px`;
 
-    if (glowEnabled && glowHost) {
+    if (glowHost) {
       glowHandlesRef.current = injectGlow(glowHost, {
         width: initial.cssWidth,
         height: initial.cssHeight,
@@ -205,9 +200,7 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
         updateInstance(inst, { cssWidth: next.cssWidth, cssHeight: next.cssHeight, cornerRadius: next.cornerRadius });
         root.style.setProperty('--mfx-radius', `${next.cornerRadius}px`);
         root.style.borderRadius = `${next.cornerRadius}px`;
-        if (glowEnabled && glowHost) {
-          // Glow SVG must be rebuilt on resize because the perimeter table and path
-          // geometry are computed from the fixed width/height at inject time.
+        if (glowHost) {
           glowHost.innerHTML = '';
           glowHandlesRef.current = injectGlow(glowHost, {
             width: next.cssWidth, height: next.cssHeight, cornerRadius: next.cornerRadius, kind: shape,
@@ -232,7 +225,7 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
       io.observe(root);
     }
 
-    if (glowEnabled && instanceRef.current && glowHandlesRef.current) {
+    if (instanceRef.current && glowHandlesRef.current) {
       glowHandlesMap.set(instanceRef.current, { handles: glowHandlesRef.current, themeRef });
       registerGlowInstance(instanceRef.current);
     }
@@ -251,7 +244,7 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
       glowHandlesRef.current = null;
       if (glowHost) glowHost.innerHTML = '';
     };
-  }, [shape, glowEnabled]);
+  }, [shape]);
 
   // Cap button-variant opacity at 0.92 — full opacity makes the ring look
   // oversaturated on the pill shape at default strength.
@@ -325,9 +318,7 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
     >
       <canvas ref={canvasRef} className="metal-fx-canvas" style={CANVAS_STYLE} />
       <div className="metal-fx-inner" aria-hidden="true" style={INNER_STYLE} />
-      {glowEnabled && (
-        <div ref={glowHostRef} aria-hidden="true" style={GLOW_HOST_STYLE} />
-      )}
+      <div ref={glowHostRef} aria-hidden="true" style={{ ...GLOW_HOST_STYLE, display: glowEnabled ? undefined : 'none' }} />
       <div ref={contentRef} className="metal-fx-content">{children}</div>
     </div>
   );

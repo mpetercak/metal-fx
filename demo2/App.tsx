@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CopyButton } from './components/CopyButton';
 import { Examples } from './components/Examples';
 import { Footer } from './components/Footer';
@@ -8,12 +8,13 @@ import { useTheme } from './hooks/useTheme';
 
 export function App() {
   const [theme, toggleTheme] = useTheme();
+  const [disableGlow, setDisableGlow] = useState(false);
 
   return (
     <main className="app">
-      <Header theme={theme} onToggleTheme={toggleTheme} />
+      <Header theme={theme} onToggleTheme={toggleTheme} disableGlow={disableGlow} onToggleGlow={() => setDisableGlow((g) => !g)} />
 
-      <Examples theme={theme} />
+      <Examples theme={theme} disableGlow={disableGlow} />
 
       <section className="section" aria-label="Installation">
         <h2 className="section-title">Installation</h2>
@@ -31,7 +32,7 @@ export function App() {
         </div>
       </section>
 
-      <Playground theme={theme} />
+      <Playground theme={theme} disableGlow={disableGlow} />
 
       <Footer />
     </main>

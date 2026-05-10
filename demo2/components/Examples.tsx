@@ -3,7 +3,7 @@ import { MetalFx } from '../../src';
 import type { Theme } from '../hooks/useTheme';
 import { ArrowUpIcon, ChevronDownIcon, DotsIcon, PlusIcon, SearchIcon18 } from './icons';
 
-export function Examples({ theme }: { theme: Theme }) {
+export function Examples({ theme, disableGlow }: { theme: Theme; disableGlow: boolean }) {
   const searchRef = useRef<HTMLLabelElement>(null);
   const dotsRef = useRef<HTMLButtonElement>(null);
 
@@ -24,7 +24,7 @@ export function Examples({ theme }: { theme: Theme }) {
             <div style={{ flex: 1 }} />
             <div className="mock-chip"><span>Agent</span><ChevronDownIcon /></div>
             <div className="mock-chip"><span>Auto</span><ChevronDownIcon /></div>
-            <MetalFx preset="gold" variant="circle" theme={theme}>
+            <MetalFx preset="gold" variant="circle" theme={theme} disableGlow={disableGlow}>
               <button type="button" className="demo-circle">
                 <ArrowUpIcon />
               </button>
@@ -47,7 +47,7 @@ export function Examples({ theme }: { theme: Theme }) {
             />
           </label>
 
-          <MetalFx preset="chromatic" theme={theme} reflectionTargets={[searchRef, dotsRef]}>
+          <MetalFx preset="chromatic" theme={theme} disableGlow={disableGlow} reflectionTargets={[searchRef, dotsRef]}>
             <button type="button" className="demo-pill">Upgrade to Pro</button>
           </MetalFx>
 

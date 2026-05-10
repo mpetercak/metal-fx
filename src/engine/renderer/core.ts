@@ -44,6 +44,7 @@ export interface SharedRenderer {
   uniforms: Record<string, WebGLUniformLocation | null>;
   preset: PresetMode;
   presetDirty: boolean;
+  contextLost: boolean;
   startMs: number;
   pausedMs: number;
   pausedAtMs: number | null;
@@ -60,19 +61,25 @@ export interface SharedRenderer {
 
 export let SHARED: SharedRenderer | null = null;
 
-export function ensureSharedRenderer(): SharedRenderer {
-  if (SHARED) return SHARED;
+// Called by ensureSharedRenderer on first init and by the contextrestored
+// listener to rebuild GL state after the browser reclaims the context.
+let _onContextRestored: (() => void) | null = null;
+export function setContextRestoredCallback(cb: (() => void) | null): void {
+  _onContextRestored = cb;
+}
 
-  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-  const glCanvas = document.createElement('canvas');
-  glCanvas.width = CANONICAL_GL_SIZE * dpr;
-  glCanvas.height = CANONICAL_GL_SIZE * dpr;
+const UNIFORM_NAMES = [
+  'u_resolution', 'u_time',
+  'u_color1', 'u_color2', 'u_color3', 'u_color4', 'u_color5', 'u_color6', 'u_color7',
+  'u_alpha1', 'u_alpha2', 'u_alpha3', 'u_alpha4', 'u_alpha5', 'u_alpha6', 'u_alpha7',
+  'u_intensity', 'u_scale', 'u_direction', 'u_softness',
+  'u_distortion', 'u_complexity', 'u_shape',
+  'u_vignette', 'u_vigOpacity', 'u_blur', 'u_shaderOpacity',
+];
 
-  const gl = (glCanvas.getContext('webgl', {
-    alpha: true, premultipliedAlpha: false, antialias: false, preserveDrawingBuffer: true,
-  }) ?? glCanvas.getContext('experimental-webgl')) as WebGLRenderingContext | null;
-  if (!gl) throw new Error('metal-fx: WebGL not supported');
-
+function buildGLPipeline(gl: WebGLRenderingContext): {
+  program: WebGLProgram; buffer: WebGLBuffer; uniforms: Record<string, WebGLUniformLocation | null>;
+} {
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
@@ -90,20 +97,47 @@ export function ensureSharedRenderer(): SharedRenderer {
   gl.enableVertexAttribArray(posLoc);
   gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
 
-  const uNames = [
-    'u_resolution', 'u_time',
-    'u_color1', 'u_color2', 'u_color3', 'u_color4', 'u_color5', 'u_color6', 'u_color7',
-    'u_alpha1', 'u_alpha2', 'u_alpha3', 'u_alpha4', 'u_alpha5', 'u_alpha6', 'u_alpha7',
-    'u_intensity', 'u_scale', 'u_direction', 'u_softness',
-    'u_distortion', 'u_complexity', 'u_shape',
-    'u_vignette', 'u_vigOpacity', 'u_blur', 'u_shaderOpacity',
-  ];
   const uniforms: Record<string, WebGLUniformLocation | null> = {};
-  for (const n of uNames) uniforms[n] = gl.getUniformLocation(program, n);
+  for (const n of UNIFORM_NAMES) uniforms[n] = gl.getUniformLocation(program, n);
+
+  return { program, buffer, uniforms };
+}
+
+export function ensureSharedRenderer(): SharedRenderer {
+  if (SHARED) return SHARED;
+
+  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+  const glCanvas = document.createElement('canvas');
+  glCanvas.width = CANONICAL_GL_SIZE * dpr;
+  glCanvas.height = CANONICAL_GL_SIZE * dpr;
+
+  const gl = (glCanvas.getContext('webgl', {
+    alpha: true, premultipliedAlpha: false, antialias: false, preserveDrawingBuffer: true,
+  }) ?? glCanvas.getContext('experimental-webgl')) as WebGLRenderingContext | null;
+  if (!gl) throw new Error('metal-fx: WebGL not supported');
+
+  const { program, buffer, uniforms } = buildGLPipeline(gl);
+
+  glCanvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    if (SHARED) SHARED.contextLost = true;
+  }, false);
+
+  glCanvas.addEventListener('webglcontextrestored', () => {
+    if (!SHARED) return;
+    const rebuilt = buildGLPipeline(SHARED.gl);
+    SHARED.program = rebuilt.program;
+    SHARED.buffer = rebuilt.buffer;
+    SHARED.uniforms = rebuilt.uniforms;
+    SHARED.presetDirty = true;
+    SHARED.contextLost = false;
+    _onContextRestored?.();
+  }, false);
 
   SHARED = {
     glCanvas, gl, program, buffer, uniforms,
     preset: PRESETS.chromatic.modes.dark, presetDirty: true,
+    contextLost: false,
     startMs: performance.now(), pausedMs: 0, pausedAtMs: null,
     rafId: 0, dpr, instances: new Set(), frameCount: 0,
     glowQueue: [], glowIdx: 0,
