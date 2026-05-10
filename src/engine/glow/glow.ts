@@ -6,8 +6,8 @@
  *   1. Samples luminance at N points around the component's perimeter.
  *   2. A state machine tracks which perimeter point is brightest, with dwell
  *      timers and fade-in/out transitions when relocating to a new hotspot.
- *   3. SVG path elements (blurred strokes at multiple radii) are positioned
- *      at the current hotspot with slight "wander" motion for organic feel.
+ *   3. Static SVG path elements (blurred strokes at multiple radii) are
+ *      positioned at the current hotspot via CSS transform.
  *   4. The stroke color is tinted to match the shader's color at that point.
  */
 import { HALO_SEGMENTS, EXTRA_SEGMENTS } from '../perfConfig';
@@ -18,14 +18,16 @@ import { hsvToRgb, rgbToHsv } from '../color';
 import {
   type GlowOptions,
   type PerimSample,
+  type Pt,
   PERIM_SAMPLES,
-  buildBlobPath,
   buildPerimTable,
+  buildStaticBlobPath,
   buildSvgMarkup,
   rrPerim,
   sampleAtArc,
   shapePerim,
   smoothstep,
+  tangentAngleAtArc,
 } from './geometry';
 
 // ─── Constants ────────────────────────────────────────────────────────────
@@ -38,7 +40,7 @@ const PEAK_OP = 0.85, BASE_OP = 0.34;
 const RELOC_FADE_MS = 1500;
 const WANDER_RANGE = 15, WANDER_LERP = 0.0075, WANDER_RETARGET = 120;
 const INSET = 1.5;
-const HALO_HALFLEN = 7.8, HALO_WOBBLE = 0.4;
+const HALO_HALFLEN = 7.8;
 const EXTRA_HALFLEN = 9.13952, EXTRA_OUTWARD = 1.0;
 const EXTRA_SCALE = 1 / 3;
 const HALO_OP_MUL = 0.8;
@@ -54,9 +56,9 @@ export type { GlowOptions } from './geometry';
 export interface GlowHandles {
   svg: SVGSVGElement;
   haloGroup: SVGGElement;
-  haloPaths: SVGPathElement[];
+  haloInner: SVGGElement;
   extraGroup: SVGGElement;
-  extraPaths: SVGPathElement[];
+  extraInner: SVGGElement;
   fadeCircle: SVGCircleElement;
   width: number; height: number; cornerRadius: number; kind: 'pill' | 'circle';
   perim: PerimSample[];
@@ -68,6 +70,7 @@ export interface GlowHandles {
 }
 
 let glowIdSeq = 0;
+const _pt: Pt = { x: 0, y: 0 };
 
 // ─── Public API ───────────────────────────────────────────────────────────
 
@@ -77,22 +80,43 @@ export function injectGlow(container: HTMLElement, opts: GlowOptions): GlowHandl
   svg.setAttribute('class', 'metal-fx-glow-svg');
   svg.setAttribute('preserveAspectRatio', 'none');
   svg.setAttribute('viewBox', `0 0 ${opts.width} ${opts.height}`);
-  svg.setAttribute('aria-hidden', 'true');
   svg.innerHTML = buildSvgMarkup(opts, p);
   container.appendChild(svg);
 
   const q = (id: string) => svg.querySelector(`#${p}_${id}`) as SVGElement;
   const haloGroup = q('h') as SVGGElement;
+  const haloInner = q('hI') as SVGGElement;
   const extraGroup = q('e') as SVGGElement;
-  const glowTransition = 'transform 100ms linear, opacity 100ms linear';
-  haloGroup.style.transition = glowTransition;
-  extraGroup.style.transition = glowTransition;
+  const extraInner = q('eI') as SVGGElement;
+  const fadeCircle = q('fc') as SVGCircleElement;
+
+  const ratio = shapePerim(opts.width, opts.height, opts.cornerRadius, opts.kind) / rrPerim(REF_W, REF_H, REF_R);
+  const haloHL = Math.max(1, HALO_HALFLEN * ratio);
+  const extraHL = Math.max(0.6, EXTRA_HALFLEN * EXTRA_SCALE * ratio);
+  const haloD = buildStaticBlobPath(haloHL, HALO_SEGMENTS);
+  const extraD = buildStaticBlobPath(extraHL, EXTRA_SEGMENTS);
+
+  const haloPaths = [q('pXl'), q('pLg'), q('pMd'), q('pSm')] as SVGPathElement[];
+  const extraPaths = [q('eO'), q('eC')] as SVGPathElement[];
+  for (const path of haloPaths) path.setAttribute('d', haloD);
+  for (const path of extraPaths) path.setAttribute('d', extraD);
+
+  haloInner.style.transformOrigin = '0 0';
+  extraInner.style.transformOrigin = '0 0';
+  haloInner.style.willChange = 'transform';
+  extraInner.style.willChange = 'transform';
+  haloInner.style.transition = 'transform 100ms linear';
+  extraInner.style.transition = 'transform 100ms linear';
+
+  haloGroup.style.willChange = 'opacity';
+  extraGroup.style.willChange = 'opacity';
+  haloGroup.style.transition = 'opacity 100ms linear';
+  extraGroup.style.transition = 'opacity 100ms linear';
+
+  fadeCircle.style.willChange = 'transform';
 
   return {
-    svg, haloGroup, extraGroup,
-    haloPaths: [q('pXl'), q('pLg'), q('pMd'), q('pSm')] as SVGPathElement[],
-    extraPaths: [q('eO'), q('eC')] as SVGPathElement[],
-    fadeCircle: q('fc') as SVGCircleElement,
+    svg, haloGroup, haloInner, extraGroup, extraInner, fadeCircle,
     width: opts.width, height: opts.height, cornerRadius: opts.cornerRadius, kind: opts.kind,
     perim: buildPerimTable(opts),
     currentIdx: 0, appearedAt: 0, glowOpacity: 0,
@@ -157,23 +181,22 @@ export function updateGlow(h: GlowHandles, inst: MetalFxInstance, nowMs: number,
   h.wanderS += (h.wanderTargetS - h.wanderS) * WANDER_LERP;
 
   const blobArc = perim[h.currentIdx].arc + h.wanderS;
-  const haloHL = Math.max(1, HALO_HALFLEN * ratio);
-  const haloD = buildBlobPath(W, H, R, h.kind, blobArc, haloHL, HALO_SEGMENTS, 0, HALO_WOBBLE * ratio, nowMs);
-  const extraHL = Math.max(0.6, EXTRA_HALFLEN * EXTRA_SCALE * ratio);
-  const extraOut = EXTRA_OUTWARD * ratio;
-  const extraD = buildBlobPath(W, H, R, h.kind, blobArc, extraHL, EXTRA_SEGMENTS, extraOut, 0, nowMs);
 
-  for (const p of h.haloPaths) p.setAttribute('d', haloD);
-  for (const p of h.extraPaths) p.setAttribute('d', extraD);
-  const center = sampleAtArc(blobArc, W, H, R, INSET, extraOut, h.kind);
-  h.fadeCircle.setAttribute('cx', center.x.toFixed(3));
-  h.fadeCircle.setAttribute('cy', center.y.toFixed(3));
+  sampleAtArc(blobArc, W, H, R, INSET, 0, h.kind, _pt);
+  const blobX = _pt.x, blobY = _pt.y;
+  const tangent = tangentAngleAtArc(blobArc, W, H, R, INSET, h.kind);
+  const tx = `translate(${blobX.toFixed(3)}px,${blobY.toFixed(3)}px) rotate(${tangent.toFixed(4)}rad)`;
+  h.haloInner.style.transform = tx;
+
+  const extraOut = EXTRA_OUTWARD * ratio;
+  sampleAtArc(blobArc, W, H, R, INSET, extraOut, h.kind, _pt);
+  h.extraInner.style.transform = `translate(${_pt.x.toFixed(3)}px,${_pt.y.toFixed(3)}px) rotate(${tangent.toFixed(4)}rad)`;
+  h.fadeCircle.style.transform = `translate(${_pt.x.toFixed(3)}px,${_pt.y.toFixed(3)}px)`;
 
   const light = theme === 'light';
-  const blobPt = sampleAtArc(blobArc, W, H, R, INSET, 0, h.kind);
   const samp = light
-    ? sampleShaderRGBChromatic(inst, blobPt.x, blobPt.y, halfWin)
-    : sampleShaderRGBAt(inst, blobPt.x, blobPt.y, halfWin);
+    ? sampleShaderRGBChromatic(inst, blobX, blobY, halfWin)
+    : sampleShaderRGBAt(inst, blobX, blobY, halfWin);
 
   if (!h.tintTween) {
     h.tintFrom = { ...samp }; h.tintTarget = { ...samp };
@@ -215,20 +238,20 @@ export function updateGlow(h: GlowHandles, inst: MetalFxInstance, nowMs: number,
   }
 
   const tinted = `rgb(${tR},${tG},${tB})`;
-  if (tinted !== h.lastHaloStroke) { h.lastHaloStroke = tinted; for (const p of h.haloPaths) p.setAttribute('stroke', tinted); }
+  if (tinted !== h.lastHaloStroke) { h.lastHaloStroke = tinted; h.haloInner.style.stroke = tinted; }
 
   if (light) {
     const hsv = rgbToHsv(tR, tG, tB);
     const [er, eg, eb] = hsvToRgb(hsv[0], Math.min(1, hsv[1] * LT_SAT_BOOST), Math.max(LT_MIN_VAL, hsv[2] * LT_VAL_MULT));
     const extraTinted = `rgb(${er},${eg},${eb})`;
-    if (extraTinted !== h.lastExtraStroke) { h.lastExtraStroke = extraTinted; for (const p of h.extraPaths) p.setAttribute('stroke', extraTinted); }
+    if (extraTinted !== h.lastExtraStroke) { h.lastExtraStroke = extraTinted; h.extraInner.style.stroke = extraTinted; }
   } else if (h.lastExtraStroke !== '#ffffff') {
-    h.lastExtraStroke = '#ffffff'; for (const p of h.extraPaths) p.setAttribute('stroke', '#ffffff');
+    h.lastExtraStroke = '#ffffff'; h.extraInner.style.stroke = '#ffffff';
   }
 
   const m = Math.max(0, Math.min(1, strengthMul));
-  h.haloGroup.setAttribute('opacity', (h.glowOpacity * HALO_OP_MUL * m).toFixed(3));
-  h.extraGroup.setAttribute('opacity', Math.min(1, h.glowOpacity * EXTRA_INTENSITY * m).toFixed(3));
+  h.haloGroup.style.opacity = (h.glowOpacity * HALO_OP_MUL * m).toFixed(3);
+  h.extraGroup.style.opacity = Math.min(1, h.glowOpacity * EXTRA_INTENSITY * m).toFixed(3);
 }
 
 export function resizeGlow(handles: GlowHandles, container: HTMLElement, opts: GlowOptions): GlowHandles {
