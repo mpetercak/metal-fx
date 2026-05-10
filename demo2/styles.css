@@ -539,6 +539,20 @@ html[data-theme="light"] .copy-btn:hover { background: rgba(0, 0, 0, 0.06); }
 }
 .playground-section .section-title { margin-bottom: 0; }
 
+.playground-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.shadcn-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  justify-content: center;
+}
+
 .playground-controls {
   display: flex;
   align-items: flex-end;

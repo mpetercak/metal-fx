@@ -4,9 +4,12 @@ import type { Theme } from '../hooks/useTheme';
 import { CopyButton } from './CopyButton';
 import { ArrowUpIcon } from './icons';
 import { PlayPauseToggle } from './PlayPauseToggle';
+import { Button } from './ui/button';
 
 const PRESETS: MetalFxPreset[] = ['chromatic', 'silver', 'gold'];
 const VARIANTS: MetalFxVariant[] = ['button', 'circle'];
+
+type PlaygroundTab = 'default' | 'shadcn';
 
 function buildSnippet(variant: MetalFxVariant, preset: MetalFxPreset, strength: number) {
   const props = [`preset="${preset}"`];
@@ -18,34 +21,62 @@ function buildSnippet(variant: MetalFxVariant, preset: MetalFxPreset, strength: 
   return `<MetalFx ${props.join(' ')}>\n${child}\n</MetalFx>`;
 }
 
+function buildShadcnSnippet(preset: MetalFxPreset, strength: number, btnVariant: string) {
+  const props = [`preset="${preset}"`];
+  if (strength !== 1) props.push(`strength={${strength.toFixed(2)}}`);
+  return `<MetalFx ${props.join(' ')}>\n  <Button variant="${btnVariant}">Click me</Button>\n</MetalFx>`;
+}
+
 export function Playground({ theme, disableGlow }: { theme: Theme; disableGlow: boolean }) {
+  const [tab, setTab] = useState<PlaygroundTab>('default');
   const [variant, setVariant] = useState<MetalFxVariant>('button');
   const [preset, setPreset] = useState<MetalFxPreset>('chromatic');
   const [strength, setStrength] = useState(100);
   const [paused, setPaused] = useState(false);
 
-  const snippet = buildSnippet(variant, preset, strength / 100);
+  const snippet = tab === 'default'
+    ? buildSnippet(variant, preset, strength / 100)
+    : buildShadcnSnippet(preset, strength / 100, 'default');
 
   return (
     <section className="playground-section" aria-label="Interactive playground">
       <h2 className="section-title">Playground</h2>
 
+      <div className="playground-tabs">
+        <button
+          className={`tab-btn${tab === 'default' ? ' active' : ''}`}
+          type="button"
+          onClick={() => setTab('default')}
+        >
+          Default
+        </button>
+        <button
+          className={`tab-btn${tab === 'shadcn' ? ' active' : ''}`}
+          type="button"
+          onClick={() => setTab('shadcn')}
+        >
+          Shadcn
+        </button>
+      </div>
+
       <div className="playground-controls">
-        <div className="control-group" role="radiogroup" aria-label="Component type">
-          <span className="control-label">Type</span>
-          <div className="control-options">
-            {VARIANTS.map((v) => (
-              <button
-                key={v}
-                className={`tab-btn${variant === v ? ' active' : ''}`}
-                type="button"
-                onClick={() => setVariant(v)}
-              >
-                {v.charAt(0).toUpperCase() + v.slice(1)}
-              </button>
-            ))}
+        {tab === 'default' && (
+          <div className="control-group" role="radiogroup" aria-label="Component type">
+            <span className="control-label">Type</span>
+            <div className="control-options">
+              {VARIANTS.map((v) => (
+                <button
+                  key={v}
+                  className={`tab-btn${variant === v ? ' active' : ''}`}
+                  type="button"
+                  onClick={() => setVariant(v)}
+                >
+                  {v.charAt(0).toUpperCase() + v.slice(1)}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="control-group" role="radiogroup" aria-label="Color preset">
           <span className="control-label">Color</span>
@@ -90,25 +121,44 @@ export function Playground({ theme, disableGlow }: { theme: Theme; disableGlow: 
       </div>
 
       <div className="playground-preview">
-        <MetalFx
-          key={`${variant}-${preset}`}
-          preset={preset}
-          variant={variant}
-          theme={theme}
-          strength={strength / 100}
-          paused={paused}
-          disableGlow={disableGlow}
-        >
-          {variant === 'circle' ? (
-            <button type="button" className="demo-circle">
-              <ArrowUpIcon />
-            </button>
-          ) : (
-            <button type="button" className="demo-pill">
-              Upgrade to Pro
-            </button>
-          )}
-        </MetalFx>
+        {tab === 'default' ? (
+          <>
+            <MetalFx
+              key={`${variant}-${preset}`}
+              preset={preset}
+              variant={variant}
+              theme={theme}
+              strength={strength / 100}
+              paused={paused}
+              disableGlow={disableGlow}
+            >
+              {variant === 'circle' ? (
+                <button type="button" className="demo-circle">
+                  <ArrowUpIcon />
+                </button>
+              ) : (
+                <button type="button" className="demo-pill">
+                  Upgrade to Pro
+                </button>
+              )}
+            </MetalFx>
+          </>
+        ) : (
+          <div className="shadcn-grid">
+            <MetalFx preset={preset} theme={theme} strength={strength / 100} paused={paused} disableGlow={disableGlow}>
+              <Button variant="default">Default</Button>
+            </MetalFx>
+            <MetalFx preset={preset} theme={theme} strength={strength / 100} paused={paused} disableGlow={disableGlow}>
+              <Button variant="secondary">Secondary</Button>
+            </MetalFx>
+            <MetalFx preset={preset} theme={theme} strength={strength / 100} paused={paused} disableGlow={disableGlow}>
+              <Button variant="outline">Outline</Button>
+            </MetalFx>
+            <MetalFx preset={preset} theme={theme} strength={strength / 100} paused={paused} disableGlow={disableGlow}>
+              <Button variant="ghost">Ghost</Button>
+            </MetalFx>
+          </div>
+        )}
 
         <PlayPauseToggle playing={!paused} onToggle={() => setPaused((p) => !p)} />
       </div>
