@@ -36,8 +36,10 @@ export function ensureGlowPixels(): void {
  *
  * readPixels stores rows bottom-up (GL convention) so Y is flipped.
  */
-function mapToGlowBuf(inst: MetalFxInstance, cssPxX: number, cssPxY: number): { bx: number; by: number } {
-  if (!SHARED) return { bx: 0, by: 0 };
+const _map = { bx: 0, by: 0 };
+
+function mapToGlowBuf(inst: MetalFxInstance, cssPxX: number, cssPxY: number): typeof _map {
+  if (!SHARED) { _map.bx = 0; _map.by = 0; return _map; }
   const { glCanvas } = SHARED;
   const cw = glCanvas.width, ch = glCanvas.height;
   const dpr = inst.dpr;
@@ -51,57 +53,63 @@ function mapToGlowBuf(inst: MetalFxInstance, cssPxX: number, cssPxY: number): { 
   const sy = (ch - srcH) / 2;
   const glX = sx + (cssPxX / inst.cssWidth) * srcW;
   const glY = sy + (cssPxY / inst.cssHeight) * srcH;
-  const bx = Math.round(glX);
-  const by = Math.round(ch - 1 - glY);
-  return { bx, by };
+  _map.bx = Math.round(glX);
+  _map.by = Math.round(ch - 1 - glY);
+  return _map;
 }
+
+const _sr = { r: 0, g: 0, b: 0, lum: 0, count: 0 };
 
 function sampleRegion(
   buf: Uint8Array, W: number, H: number,
   bx: number, by: number, radius: number
-): { r: number; g: number; b: number; lum: number; count: number } {
+): typeof _sr {
   const r = Math.max(1, radius | 0);
   const x0 = Math.max(0, bx - r), x1 = Math.min(W, bx + r + 1);
   const y0 = Math.max(0, by - r), y1 = Math.min(H, by + r + 1);
-  let sR = 0, sG = 0, sB = 0, sLum = 0, count = 0;
+  _sr.r = 0; _sr.g = 0; _sr.b = 0; _sr.lum = 0; _sr.count = 0;
   for (let py = y0; py < y1; py++) {
     const row = py * W;
     for (let px = x0; px < x1; px++) {
       const i = (row + px) * 4;
-      sR += buf[i]; sG += buf[i + 1]; sB += buf[i + 2];
-      sLum += (0.2126 * buf[i] + 0.7152 * buf[i + 1] + 0.0722 * buf[i + 2]) / 255;
-      count++;
+      _sr.r += buf[i]; _sr.g += buf[i + 1]; _sr.b += buf[i + 2];
+      _sr.lum += (0.2126 * buf[i] + 0.7152 * buf[i + 1] + 0.0722 * buf[i + 2]) / 255;
+      _sr.count++;
     }
   }
-  return { r: sR, g: sG, b: sB, lum: sLum, count };
+  return _sr;
 }
+
+const _rgb: ShaderRGB = { r: 255, g: 255, b: 255 };
 
 export function sampleShaderLumAt(inst: MetalFxInstance, cssPxX: number, cssPxY: number, radius: number): number {
   if (!SHARED) return 0;
   ensureGlowPixels();
-  const { bx, by } = mapToGlowBuf(inst, cssPxX, cssPxY);
-  const s = sampleRegion(SHARED.glowPixels, SHARED.glowPixelsW, SHARED.glowPixelsH, bx, by, radius);
+  const m = mapToGlowBuf(inst, cssPxX, cssPxY);
+  const s = sampleRegion(SHARED.glowPixels, SHARED.glowPixelsW, SHARED.glowPixelsH, m.bx, m.by, radius);
   return s.count > 0 ? s.lum / s.count : 0;
 }
 
 export function sampleShaderRGBAt(inst: MetalFxInstance, cssPxX: number, cssPxY: number, radius: number): ShaderRGB {
-  if (!SHARED) return { r: 255, g: 255, b: 255 };
+  if (!SHARED) { _rgb.r = 255; _rgb.g = 255; _rgb.b = 255; return _rgb; }
   ensureGlowPixels();
-  const { bx, by } = mapToGlowBuf(inst, cssPxX, cssPxY);
-  const s = sampleRegion(SHARED.glowPixels, SHARED.glowPixelsW, SHARED.glowPixelsH, bx, by, radius);
-  if (s.count === 0) return { r: 255, g: 255, b: 255 };
-  return { r: s.r / s.count, g: s.g / s.count, b: s.b / s.count };
+  const m = mapToGlowBuf(inst, cssPxX, cssPxY);
+  const s = sampleRegion(SHARED.glowPixels, SHARED.glowPixelsW, SHARED.glowPixelsH, m.bx, m.by, radius);
+  if (s.count === 0) { _rgb.r = 255; _rgb.g = 255; _rgb.b = 255; return _rgb; }
+  _rgb.r = s.r / s.count; _rgb.g = s.g / s.count; _rgb.b = s.b / s.count;
+  return _rgb;
 }
 
 export function sampleShaderRGBChromatic(inst: MetalFxInstance, cssPxX: number, cssPxY: number, radius: number): ShaderRGB {
-  if (!SHARED) return { r: 255, g: 255, b: 255 };
+  if (!SHARED) { _rgb.r = 255; _rgb.g = 255; _rgb.b = 255; return _rgb; }
   ensureGlowPixels();
-  const { bx, by } = mapToGlowBuf(inst, cssPxX, cssPxY);
+  const m = mapToGlowBuf(inst, cssPxX, cssPxY);
   const { glowPixels: buf, glowPixelsW: W, glowPixelsH: H } = SHARED;
   const r = Math.max(1, radius | 0);
-  const x0 = Math.max(0, bx - r), x1 = Math.min(W, bx + r + 1);
-  const y0 = Math.max(0, by - r), y1 = Math.min(H, by + r + 1);
-  let bestR = 255, bestG = 255, bestB = 255, bestScore = -1;
+  const x0 = Math.max(0, m.bx - r), x1 = Math.min(W, m.bx + r + 1);
+  const y0 = Math.max(0, m.by - r), y1 = Math.min(H, m.by + r + 1);
+  let bestScore = -1;
+  _rgb.r = 255; _rgb.g = 255; _rgb.b = 255;
   for (let py = y0; py < y1; py++) {
     const row = py * W;
     for (let px = x0; px < x1; px++) {
@@ -110,8 +118,8 @@ export function sampleShaderRGBChromatic(inst: MetalFxInstance, cssPxX: number, 
       const maxC = Math.max(rr, gg, bb), minC = Math.min(rr, gg, bb);
       const sat = maxC > 0 ? (maxC - minC) / maxC : 0;
       const score = sat * (0.35 + 0.65 * (maxC / 255));
-      if (score > bestScore) { bestScore = score; bestR = rr; bestG = gg; bestB = bb; }
+      if (score > bestScore) { bestScore = score; _rgb.r = rr; _rgb.g = gg; _rgb.b = bb; }
     }
   }
-  return { r: bestR, g: bestG, b: bestB };
+  return _rgb;
 }
