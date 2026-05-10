@@ -29,6 +29,10 @@ import type { MetalFxProps, MetalFxTheme } from './types';
 
 ensureStylesInjected();
 
+const CANVAS_STYLE: CSSProperties = { position: 'absolute', inset: 0, width: '100%', height: '100%' };
+const INNER_STYLE: CSSProperties = { position: 'absolute', inset: 3 };
+const GLOW_HOST_STYLE: CSSProperties = { position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 3, borderRadius: 'inherit' };
+
 /**
  * Global registry mapping each live MetalFxInstance to its glow handles.
  * The shared renderer's tick() loop invokes one glow update per frame via
@@ -83,7 +87,6 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
 ) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const innerRef = useRef<HTMLDivElement | null>(null);
   const glowHostRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const instanceRef = useRef<MetalFxInstance | null>(null);
@@ -97,7 +100,6 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
   const glowEnabled = !disableGlow;
 
   useImperativeHandle(forwardedRef, () => rootRef.current as HTMLDivElement, []);
-  useLayoutEffect(() => { ensureStylesInjected(); }, []);
 
   useEffect(() => { setSharedPreset(preset, resolvedTheme); }, [preset, resolvedTheme]);
   useEffect(() => { if (paused) pauseShared(); else resumeShared(); }, [paused]);
@@ -236,9 +238,22 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
     const root = rootRef.current;
     const inst = instanceRef.current;
     if (!root || !inst) return;
-    root.style.setProperty('--mfx-radius', `${inst.cornerRadius}px`);
-    root.style.borderRadius = `${inst.cornerRadius}px`;
-  }, [borderRadius, resolvedTheme, variant]);
+    const rawRadius = (() => {
+      if (typeof borderRadius === 'number') return borderRadius;
+      const childEl = contentRef.current?.firstElementChild as HTMLElement | null;
+      if (childEl) {
+        const parsed = parseFloat(getComputedStyle(childEl).borderTopLeftRadius);
+        if (Number.isFinite(parsed) && parsed > 0) return parsed;
+      }
+      return initialWrapperRadiusRef.current;
+    })();
+    const cornerRadius = shape === 'circle'
+      ? Math.max(rawRadius, Math.min(inst.cssWidth, inst.cssHeight) / 2)
+      : rawRadius;
+    updateInstance(inst, { cornerRadius });
+    root.style.setProperty('--mfx-radius', `${cornerRadius}px`);
+    root.style.borderRadius = `${cornerRadius}px`;
+  }, [borderRadius, resolvedTheme, variant, shape]);
 
   const wrapperStyle = useMemo<CSSProperties>(
     () => ({ ...style, ['--mfx-strength' as string]: String(Math.min(1, Math.max(0, strength))) }),
@@ -249,7 +264,7 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
     <div
       {...rest}
       ref={rootRef}
-      className={['metal-fx-root', className].filter(Boolean).join(' ')}
+      className={className ? `metal-fx-root ${className}` : 'metal-fx-root'}
       data-variant={variant}
       data-shape={shape}
       data-theme={resolvedTheme}
@@ -257,18 +272,10 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
       data-normalize={normalizeHostStyles ? 'true' : 'false'}
       style={wrapperStyle}
     >
-      <canvas
-        ref={canvasRef}
-        className="metal-fx-canvas"
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
-      />
-      <div ref={innerRef} className="metal-fx-inner" aria-hidden="true" style={{ position: 'absolute', inset: 3 }} />
+      <canvas ref={canvasRef} className="metal-fx-canvas" style={CANVAS_STYLE} />
+      <div className="metal-fx-inner" aria-hidden="true" style={INNER_STYLE} />
       {glowEnabled && (
-        <div
-          ref={glowHostRef}
-          aria-hidden="true"
-          style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 3, borderRadius: 'inherit' }}
-        />
+        <div ref={glowHostRef} aria-hidden="true" style={GLOW_HOST_STYLE} />
       )}
       <div ref={contentRef} className="metal-fx-content">{children}</div>
     </div>
