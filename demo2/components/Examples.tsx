@@ -10,6 +10,7 @@ const chipClass = 'inline-flex items-center gap-1 h-9 pl-3.5 pr-2.5 rounded-full
 export function Examples({ theme }: { theme: Theme }) {
   const searchRef = useRef<HTMLLabelElement>(null);
   const dotsRef = useRef<HTMLButtonElement>(null);
+  const autoChipRef = useRef<HTMLDivElement>(null);
 
   return (
     <section className="w-full flex flex-col gap-3 mb-12" aria-label="Effect demonstrations">
@@ -29,8 +30,8 @@ export function Examples({ theme }: { theme: Theme }) {
             </div>
             <div className="flex-1" />
             <div className={chipClass}><span>Agent</span><ChevronDownIcon /></div>
-            <div className={chipClass}><span>Auto</span><ChevronDownIcon /></div>
-            <MetalFx preset="gold" variant="circle" theme={theme}>
+            <div className={chipClass} ref={autoChipRef}><span>Auto</span><ChevronDownIcon /></div>
+            <MetalFx preset="gold" variant="circle" theme={theme} reflectionTargets={[autoChipRef]}>
               <button type="button" className={demoCircleClass}>
                 <ArrowUpIcon />
               </button>
