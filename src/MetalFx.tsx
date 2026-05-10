@@ -129,6 +129,20 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
 
   useImperativeHandle(forwardedRef, () => rootRef.current as HTMLDivElement, []);
 
+  const resolveRadius = (w: number, h: number) => {
+    const raw = typeof borderRadius === 'number'
+      ? borderRadius
+      : (() => {
+          const childEl = contentRef.current?.firstElementChild as HTMLElement | null;
+          if (childEl) {
+            const parsed = parseFloat(getComputedStyle(childEl).borderTopLeftRadius);
+            if (Number.isFinite(parsed) && parsed > 0) return parsed;
+          }
+          return initialWrapperRadiusRef.current;
+        })();
+    return Math.min(raw, Math.min(w, h) / 2);
+  };
+
   useEffect(() => { setSharedPreset(preset, resolvedTheme); }, [preset, resolvedTheme]);
   useEffect(() => { if (paused) pauseShared(); else resumeShared(); }, [paused]);
 
@@ -152,19 +166,7 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
       const rect = root.getBoundingClientRect();
       const cssWidth = Math.max(1, Math.round(rect.width));
       const cssHeight = Math.max(1, Math.round(rect.height));
-      const rawRadius = (() => {
-        if (typeof borderRadius === 'number') return borderRadius;
-        const childEl = contentRef.current?.firstElementChild as HTMLElement | null;
-        if (childEl) {
-          const parsed = parseFloat(getComputedStyle(childEl).borderTopLeftRadius);
-          if (Number.isFinite(parsed) && parsed > 0) return parsed;
-        }
-        return initialWrapperRadiusRef.current;
-      })();
-      const cornerRadius = shape === 'circle'
-        ? Math.max(rawRadius, Math.min(cssWidth, cssHeight) / 2)
-        : rawRadius;
-      return { cssWidth, cssHeight, cornerRadius };
+      return { cssWidth, cssHeight, cornerRadius: resolveRadius(cssWidth, cssHeight) };
     };
 
     const initial = measure();
@@ -280,18 +282,7 @@ export const MetalFx = forwardRef<HTMLDivElement, MetalFxProps>(function MetalFx
     const root = rootRef.current;
     const inst = instanceRef.current;
     if (!root || !inst) return;
-    const rawRadius = (() => {
-      if (typeof borderRadius === 'number') return borderRadius;
-      const childEl = contentRef.current?.firstElementChild as HTMLElement | null;
-      if (childEl) {
-        const parsed = parseFloat(getComputedStyle(childEl).borderTopLeftRadius);
-        if (Number.isFinite(parsed) && parsed > 0) return parsed;
-      }
-      return initialWrapperRadiusRef.current;
-    })();
-    const cornerRadius = shape === 'circle'
-      ? Math.max(rawRadius, Math.min(inst.cssWidth, inst.cssHeight) / 2)
-      : rawRadius;
+    const cornerRadius = resolveRadius(inst.cssWidth, inst.cssHeight);
     updateInstance(inst, { cornerRadius });
     root.style.setProperty('--mfx-radius', `${cornerRadius}px`);
     root.style.borderRadius = `${cornerRadius}px`;
