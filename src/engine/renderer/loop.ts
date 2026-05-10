@@ -260,7 +260,7 @@ function tick(now: number): void {
 
   for (const inst of SHARED.instances) { if (inst.visible) copyShaderToInstance(inst); }
 
-  if (_glowCallback && SHARED.glowQueue.length > 0) {
+  if (_glowCallback && SHARED.glowQueue.length > 0 && ++SHARED.glowSkip % 3 === 0) {
     const queue = SHARED.glowQueue;
     if (SHARED.glowIdx >= queue.length) SHARED.glowIdx = 0;
     const inst = queue[SHARED.glowIdx];

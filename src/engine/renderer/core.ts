@@ -56,6 +56,7 @@ export interface SharedRenderer {
   frameCount: number;
   glowQueue: MetalFxInstance[];
   glowIdx: number;
+  glowSkip: number;
   glowPixels: Uint8Array;
   glowPixelsW: number;
   glowPixelsH: number;
@@ -153,7 +154,7 @@ export function ensureSharedRenderer(): SharedRenderer {
     contextLost: false, useOffscreen, frameBitmap: null,
     startMs: performance.now(), pausedMs: 0, pausedAtMs: null,
     rafId: 0, dpr, instances: new Set(), frameCount: 0,
-    glowQueue: [], glowIdx: 0,
+    glowQueue: [], glowIdx: 0, glowSkip: 0,
     glowPixels: new Uint8Array(size * size * 4),
     glowPixelsW: size, glowPixelsH: size,
   };

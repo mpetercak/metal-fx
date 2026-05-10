@@ -14,7 +14,7 @@ const EXTRA_BLUR_OUTER = 2.0 * EXTRA_SCALE;
 const EXTRA_BLUR_CORE = 1.35 * EXTRA_SCALE;
 const EXTRA_FADE_R = 13.0 * EXTRA_SCALE;
 
-export const PERIM_SAMPLES = 24;
+export const PERIM_SAMPLES = 16;
 
 export interface GlowOptions { width: number; height: number; cornerRadius: number; kind: 'pill' | 'circle' }
 export interface Pt { x: number; y: number }
